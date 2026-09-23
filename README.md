@@ -2,7 +2,7 @@
 
 AML Agent превращает обезличенный граф банковских переводов в объяснимую очередь проверок для AML-аналитика. Система проверяет входные данные, рассчитывает детерминированные графовые признаки, назначает роли, ранжирует цели, создаёт локальный review case и независимо проверяет полученные артефакты.
 
-> Текущий статус: работают детерминированная аналитика, CLI agent и FastAPI на встроенном датасете (фазы 0–4). React UI и Docker Compose ещё не реализованы; состояние задач отражено в [TODO.md](TODO.md).
+> Текущий статус: работают детерминированная аналитика, CLI agent, FastAPI и React UI на встроенном датасете (фазы 0–5). Чистый запуск Docker Compose ещё не проверен; состояние задач отражено в [TODO.md](TODO.md).
 
 ## Запуск HTTP API и demo
 
@@ -29,6 +29,18 @@ py -3.12 -m venv .venv
 
 Откройте [интерактивную документацию API](http://127.0.0.1:8000/docs) или [health](http://127.0.0.1:8000/health).
 `/health` показывает доступность backend. В `/docs` создайте run через `POST /api/runs` с `{"dataset_id":"bundled","mode":"demo"}`, затем передайте полученный `run_id` в `POST /api/runs/{run_id}/execute`. Дождитесь `status=completed` и `verification_status=passed` в `GET /api/runs/{run_id}`; только после этого доступны оценки узлов, case и проверенные файлы. API принимает только встроенный `dataset_id=bundled`, без загрузки произвольных parquet. В demo-режиме API-ключ не нужен. Используйте один Uvicorn worker: координация выполняющихся запусков находится в памяти процесса.
+
+### Запуск React UI
+
+Оставьте API работающим и в другом терминале выполните:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Откройте <http://127.0.0.1:5173> и нажмите **Start bundled demo**. Интерфейс покажет безопасные события выполнения, затем проверенные top-20, кластеры, направленный граф на 1–2 перехода, review case и скачиваемые артефакты. Кнопка **Reset demo** доступна после завершения run. Подробнее: [frontend/README.md](frontend/README.md).
 
 ```bash
 python -m pip install -r backend/requirements-api-dev.txt
@@ -108,7 +120,7 @@ python3.12 -m venv .venv
 ## Архитектура
 
 ```text
-React / Vite UI (фаза 5)
+React / Vite UI [реализовано]
        |
        v
 FastAPI-приложение (фаза 4) ---- SQLite-хранилище run/case/audit [реализовано]
@@ -243,6 +255,7 @@ PYTHONPATH=backend .venv/bin/python -m pytest backend/tests -q
 |   |-- requirements.lock
 |   |-- requirements-api.txt
 |   `-- requirements-api-dev.txt
+|-- frontend/          # React/Vite/TypeScript UI и Cytoscape-граф
 |-- starter/
 |   |-- README.md
 |   |-- requirements.txt
