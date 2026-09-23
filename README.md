@@ -2,7 +2,25 @@
 
 AML Agent превращает обезличенный граф банковских переводов в объяснимую очередь проверок для AML-аналитика. Система проверяет входные данные, рассчитывает детерминированные графовые признаки, назначает роли, ранжирует цели, создаёт локальный review case и независимо проверяет полученные артефакты.
 
-> Текущий статус: работают детерминированная аналитика, CLI agent, FastAPI и React UI на встроенном датасете (фазы 0–5). Dockerfiles и Compose-конфигурация добавлены, но текущий Compose entrypoint backend требует исправления перед контейнерным запуском; состояние задач отражено в [TODO.md](TODO.md).
+> Текущий статус: работают детерминированная аналитика, CLI agent, FastAPI и React UI на встроенном датасете (фазы 0–5). Docker Compose собирает и запускает полный demo workflow без API-ключа; состояние остальных задач фазы 6 отражено в [TODO.md](TODO.md).
+
+## Запуск через Docker Compose
+
+Для воспроизводимого demo не нужен `.env` или API-ключ:
+
+```bash
+docker compose up --build
+```
+
+После успешных healthchecks откройте <http://127.0.0.1:5173>. Backend health доступен по <http://127.0.0.1:8000/health> и через frontend proxy по <http://127.0.0.1:5173/health>. По умолчанию используется `DEMO_MODE=true`; аналитика, tools, SQLite, review case, экспорт и verification выполняются по-настоящему.
+
+Остановка контейнеров:
+
+```bash
+docker compose down
+```
+
+Именованные volumes сохраняют SQLite и артефакты между обычными перезапусками. Команду `docker compose down --volumes` используйте только когда нужно намеренно удалить локальное demo-состояние.
 
 ## Запуск HTTP API и demo
 
@@ -246,7 +264,7 @@ python -m pytest backend/tests -q
 | `503 EXECUTION_CAPACITY` или `STREAM_CAPACITY` | Повторите запрос после освобождения слота; для MVP оставьте один API worker. |
 | Run завершился `failed` или `verification_failed` | Посмотрите безопасные events и сохранённые предупреждения, исправьте причину и создайте новый run. |
 | UI на `:5173` не получает данные | Убедитесь, что FastAPI запущен на `127.0.0.1:8000`; Vite проксирует `/api` и `/health` на этот порт. |
-| `docker compose up --build` не запускает backend | Текущий Compose entrypoint ссылается на отсутствующий `aml_agent.api.app:app`, а backend image не включает HTTP-зависимости; используйте локальный запуск выше, пока контейнерный путь не исправлен. |
+| `docker compose up --build` не проходит healthchecks | Проверьте, что Docker Engine запущен, а порты 8000 и 5173 свободны; `docker compose ps` покажет состояние сервисов. |
 
 Полный HTTP-контракт и коды ошибок описаны в [docs/API.md](docs/API.md). Вывод `/health` подтверждает доступность локального backend, но не действительность ключа или доступность внешнего API.
 
@@ -286,7 +304,7 @@ python -m pytest backend/tests -q
 |   |-- requirements-api.txt
 |   `-- requirements-api-dev.txt
 |-- frontend/          # React/Vite/TypeScript UI и Cytoscape-граф
-|-- docker-compose.yml # контейнерный scaffold; запуск пока не подтверждён
+|-- docker-compose.yml # backend/frontend и healthchecks
 |-- starter/
 |   |-- README.md
 |   |-- requirements.txt

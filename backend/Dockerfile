@@ -9,8 +9,10 @@ ENV VIRTUAL_ENV=/opt/venv \
 
 RUN python -m venv "$VIRTUAL_ENV"
 
-COPY backend/requirements.lock /tmp/requirements.lock
-RUN python -m pip install --requirement /tmp/requirements.lock
+COPY backend/requirements.lock backend/requirements-api.txt /tmp/
+RUN python -m pip install \
+    --requirement /tmp/requirements.lock \
+    --requirement /tmp/requirements-api.txt
 
 COPY backend /src/backend
 RUN python -m pip install --no-deps --no-build-isolation /src/backend
@@ -35,12 +37,11 @@ RUN groupadd --system --gid 10001 aml-agent \
     && chown -R aml-agent:aml-agent /app
 
 COPY --from=builder /opt/venv /opt/venv
+COPY --chown=aml-agent:aml-agent backend /app/backend
 COPY --chown=aml-agent:aml-agent data /app/data
 
 WORKDIR /app
 USER aml-agent
 EXPOSE 8000
 
-# Безопасный fallback для текущих фаз 0–3. docker-compose переопределяет
-# команду на FastAPI entrypoint после добавления API в фазе 4.
-CMD ["aml-agent-run", "--mode", "demo", "--data", "/app/data", "--database", "/app/var/aml-agent.sqlite3", "--artifacts", "/app/artifacts"]
+CMD ["python", "-m", "uvicorn", "backend.app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
