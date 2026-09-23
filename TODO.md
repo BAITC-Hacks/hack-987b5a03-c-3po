@@ -14,35 +14,35 @@ One click starts a real run on the bundled dataset. The UI streams safe tool eve
 - [x] Add secure `.env.example` and local ignored `.env` placeholders.
 - [x] Add `AGENTS.md` project instructions.
 - [x] Add SciPy required by starter PageRank.
-- [ ] Run the starter in a clean Python environment and record runtime.
+- [x] Run the starter in a clean Python environment and record runtime in `docs/BASELINE.md`.
 - [x] Add a dataset fingerprint/checksum manifest.
 
 ## Phase 1 — deterministic core pipeline, P0
 
-- [ ] Create `backend/` package and dependency lockfile.
-- [ ] Implement typed parquet loaders and dataset validation.
-- [ ] Reconcile transactions with aggregated edges.
-- [ ] Build the directed weighted graph including orphan nodes.
-- [ ] Implement structural features from `docs/ANALYTICS.md`.
-- [ ] Implement date-based supporting temporal features.
-- [ ] Implement deterministic Louvain clustering with seed 42.
-- [ ] Implement versioned role assignment and evidence templates.
-- [ ] Implement priority scoring and deterministic tie-breaking.
-- [ ] Write all three mandatory CSV files.
-- [ ] Add unit and regression tests for data traps.
-- [ ] Verify full pipeline runtime stays below five minutes.
+- [x] Create `backend/` package and dependency lockfile.
+- [x] Implement typed parquet loaders and dataset validation.
+- [x] Reconcile transactions with aggregated edges.
+- [x] Build the directed weighted graph including orphan nodes.
+- [x] Implement structural features from `docs/ANALYTICS.md`.
+- [x] Implement date-based supporting temporal features.
+- [x] Implement deterministic Louvain clustering with seed 42.
+- [x] Implement versioned role assignment and evidence templates.
+- [x] Implement priority scoring and deterministic tie-breaking.
+- [x] Write all three mandatory CSV files.
+- [x] Add unit and regression tests for data traps.
+- [x] Verify full pipeline runtime stays below five minutes.
 
 Exit criterion: one Python command creates valid non-empty outputs without OpenAI.
 
 ## Phase 2 — storage, tools, and verification, P0
 
-- [ ] Add SQLite models/repositories for runs, events, cases, and artifacts.
-- [ ] Implement atomic artifact writes and SHA-256 hashes.
-- [ ] Implement the exact strict schemas in `docs/TOOLS.md`.
-- [ ] Add state-based tool allowlisting.
-- [ ] Make state-changing tools idempotent.
-- [ ] Implement `verify_run` independently from the agent.
-- [ ] Add tool contract and invalid-state tests.
+- [x] Add SQLite models/repositories for runs, events, cases, and artifacts.
+- [x] Implement atomic artifact writes and SHA-256 hashes.
+- [x] Implement the exact strict schemas in `docs/TOOLS.md`.
+- [x] Add state-based tool allowlisting.
+- [x] Make state-changing tools idempotent.
+- [x] Implement `verify_run` independently from the agent.
+- [x] Add tool contract and invalid-state tests.
 
 Exit criterion: a deterministic script can execute the complete tool sequence, create a case, export files, and pass verification.
 

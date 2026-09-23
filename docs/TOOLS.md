@@ -9,6 +9,8 @@
 - All GIDs are decimal strings in JSON.
 - A tool validates its arguments again at execution time; schema validation is not the only security boundary.
 - Analytics tools are deterministic and idempotent for the same run and ruleset.
+- A transport retry may replay a persisted result only for the exact same arguments in that tool's immediate successor state. Replays from later states or `completed` are rejected.
+- Review-case titles are selected from a fixed server-approved cautious allowlist; arbitrary model wording is rejected.
 
 ## 2. Standard result envelope
 
@@ -213,7 +215,7 @@ The canonical input definitions are:
   {
     "type": "function",
     "name": "create_review_case",
-    "description": "Create one local analyst review case from a ranked target snapshot. This does not block accounts or contact an external system.",
+    "description": "Create one local analyst review case from the complete ranked target snapshot. This does not block accounts or contact an external system.",
     "strict": true,
     "parameters": {
       "type": "object",
@@ -236,9 +238,12 @@ The canonical input definitions are:
         },
         "title": {
           "type": "string",
-          "minLength": 3,
-          "maxLength": 120,
-          "description": "Cautious analyst-facing case title without declarations of guilt."
+          "enum": [
+            "Priority structural indicators for analyst review",
+            "Network indicators for analyst review",
+            "Структурные индикаторы для проверки аналитиком"
+          ],
+          "description": "Server-approved cautious analyst-facing case title."
         }
       },
       "required": ["run_id", "target_gids", "title"],
@@ -270,7 +275,7 @@ The canonical input definitions are:
   {
     "type": "function",
     "name": "verify_run",
-    "description": "Independently verify database invariants, CSV schemas and counts, score bounds, evidence, ranking order, artifact hashes, and review-case consistency.",
+    "description": "Independently recompute authoritative analytics and verify database invariants, CSV schemas and counts, roles, scores, evidence, clusters, ranking order, artifact hashes, and review-case consistency.",
     "strict": true,
     "parameters": {
       "type": "object",
@@ -317,5 +322,8 @@ The canonical input definitions are:
 | `case_created` | `get_node_evidence`, `export_results` |
 | `exported` | `verify_run` |
 | `verified`, `completed` | `get_node_evidence` only |
+| `verification_failed`, `failed` | none |
 
 The backend rejects any tool call that does not match the persisted state even if the model attempts it.
+
+An exact invocation replay in the immediate successor state is an internal idempotency exception for transport/crash recovery; it is not exposed as an available model tool. Recovery uses immutable argument intent and, when available, the persisted result. A completed run accepts only read-only `get_node_evidence`, which is evaluated without writing events or cached results.

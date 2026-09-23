@@ -89,6 +89,7 @@ The production system instruction must enforce these points:
 - Describe findings as structural indicators or review hypotheses.
 - Treat depth-4 missing outflow and seed inflow as explicit uncertainty.
 - Create exactly one local review case from the persisted ranking.
+- Select the case title only from the server-approved cautious allowlist; never invent a guilt or criminal label.
 - A run is complete only when `verify_run` returns `passed: true`.
 - Do not reveal hidden reasoning. Produce short decisions and safe tool summaries only.
 

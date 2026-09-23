@@ -2,7 +2,7 @@
 
 AML Agent turns an anonymized bank-transfer graph into an explainable investigation queue for an AML analyst. It validates the batch, computes deterministic graph evidence, assigns roles, ranks targets, creates a local review case, and verifies the resulting artifacts.
 
-> Current status: architecture and starter baseline are committed. The production pipeline, API, agent orchestrator, and UI are the next implementation stages tracked in [TODO.md](TODO.md).
+> Current status: phases 0–2 are implemented. The repository now has a tested deterministic analytics pipeline, strict controlled tools, SQLite audit storage, local review-case creation, immutable exports, and independent verification. OpenAI orchestration, HTTP API, UI, and Docker remain in phases 3–6 of [TODO.md](TODO.md).
 
 ## Problem
 
@@ -23,7 +23,39 @@ Parquet batch
   -> export and verify required artifacts
 ```
 
-The OpenAI model orchestrates controlled tools and produces schema-constrained summaries. It does not calculate roles, invent metrics, access arbitrary files, or execute shell commands.
+In phase 3, the OpenAI model will orchestrate controlled tools and produce schema-constrained summaries. It will not calculate roles, invent metrics, access arbitrary files, or execute shell commands.
+
+## Implemented golden path (CLI)
+
+The current offline workflow executes nine state-changing/verification steps; the tenth controlled tool, `get_node_evidence`, is available on demand:
+
+```text
+inspect_dataset -> build_graph -> compute_graph_features -> cluster_network
+-> assign_roles -> rank_targets -> create_review_case -> export_results
+-> verify_run -> completed
+```
+
+On the bundled dataset it produces 2,248 node assessments, 91 cluster summaries, a ranked top 20, one local review case, three mandatory CSV files, `audit.json`, and a 19-check verification report. No API key is used in phases 0–2.
+
+### Quick start on Windows
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements.lock
+.\.venv\Scripts\python.exe -m pip install --no-deps --no-build-isolation -e backend
+.\.venv\Scripts\aml-agent-tools.exe --data data --database var\aml-agent.sqlite3 --artifacts artifacts --top 20
+```
+
+### Quick start on macOS/Linux
+
+```bash
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r backend/requirements.lock
+.venv/bin/python -m pip install --no-deps --no-build-isolation -e backend
+.venv/bin/aml-agent-tools --data data --database var/aml-agent.sqlite3 --artifacts artifacts --top 20
+```
+
+A successful run ends with `status: completed`, `verification_status: passed`, and all nine workflow steps marked `ok: true`. Re-run with a new database path for a separate immutable audit record.
 
 ## Dataset
 
@@ -37,19 +69,19 @@ The repository includes the anonymized hackathon dataset:
 
 See [data/README.md](data/README.md) for fields and collection constraints. The most important limitation is the four-hop boundary: 444 depth-4 nodes have no visible outgoing transfers and must not automatically be labeled as terminal recipients.
 
-## Planned architecture
+## Architecture
 
 ```text
-React / Vite UI
+React / Vite UI (phase 5)
        |
        v
-FastAPI application ---- SQLite run/case/audit store
+FastAPI application (phase 4) ---- SQLite run/case/audit store [implemented]
        |
-       +---- Agent orchestrator ---- OpenAI Responses API
+       +---- Agent orchestrator (phase 3) ---- OpenAI Responses API
        |              |
-       |              +---- strict function tools
+       |              +---- strict function tools [implemented]
        |
-       +---- Deterministic analytics engine
+       +---- Deterministic analytics engine [implemented]
                      |
                      +---- pandas / NetworkX / SciPy
                      +---- parquet input
@@ -59,6 +91,8 @@ FastAPI application ---- SQLite run/case/audit store
 Detailed design:
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Phase 0 baseline](docs/BASELINE.md)
+- [Phases 0–2 verification record](docs/PHASES_0_2_RESULTS.md)
 - [Data model](docs/DATA_MODEL.md)
 - [Analytical rules](docs/ANALYTICS.md)
 - [Tool contracts](docs/TOOLS.md)
@@ -67,7 +101,7 @@ Detailed design:
 
 ## OpenAI configuration
 
-The live orchestrator will use the OpenAI Responses API with function calling and Structured Outputs. The default model is configurable and currently set to `gpt-5-mini`, which supports the Responses endpoint, function calling, and structured outputs.
+The live orchestrator is phase 3 work and will use the OpenAI Responses API with function calling and Structured Outputs. The default model is configurable through `OPENAI_MODEL`; it is not hardcoded into analytics or tools.
 
 1. Copy `.env.example` to `.env` if `.env` does not already exist.
 2. Put your existing key in the local ignored file:
@@ -83,15 +117,19 @@ For deterministic offline operation, keep `DEMO_MODE=true`; the graph analysis r
 
 Official references: [function calling](https://developers.openai.com/api/docs/guides/function-calling), [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs), and [`gpt-5-mini`](https://developers.openai.com/api/docs/models/gpt-5-mini).
 
+The key is not needed yet. When phase 3 starts, put it only in the ignored local `.env` as `OPENAI_API_KEY=...`; never send it in chat or commit it.
+
 ## Run the supplied starter
 
 The starter validates the parquet files, builds the graph, calculates basic features, and writes empty output templates. It is a baseline, not the finished product.
 
 ```bash
-python -m venv .venv
-pip install -r starter/requirements.txt
-python starter/starter.py --data data --out out
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r starter/requirements.txt
+.venv/bin/python starter/starter.py --data data --out out
 ```
+
+On Windows, replace `.venv/bin/python` with `.\.venv\Scripts\python.exe`.
 
 Expected output:
 
@@ -135,6 +173,15 @@ The starter intentionally leaves role assignment, clustering, ranking, and visua
 |   |-- ARCHITECTURE.md
 |   |-- DATA_MODEL.md
 |   `-- TOOLS.md
+|-- backend/
+|   |-- aml_agent/
+|   |   |-- analytics/
+|   |   |-- storage/
+|   |   |-- tools/
+|   |   `-- tool_runtime.py
+|   |-- tests/
+|   |-- pyproject.toml
+|   `-- requirements.lock
 |-- starter/
 |   |-- README.md
 |   |-- requirements.txt
