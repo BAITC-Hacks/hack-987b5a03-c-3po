@@ -1,40 +1,40 @@
-# AML Agent backend
+# Серверная часть AML Agent
 
-Deterministic analytics, storage, controlled tools, verification, and agent orchestration for AML Agent.
+Детерминированная аналитика, хранилище, контролируемые tools, независимая проверка и agent orchestration для AML Agent.
 
-Implemented modules:
+Реализованные модули:
 
-- `aml_agent.analytics`: validated parquet loading, directed graph features, deterministic roles, Louvain clusters, ranking, and byte-stable CSV export;
-- `aml_agent.storage`: SQLite state/audit repositories and write-once controlled artifacts;
-- `aml_agent.tools`: strict schemas and state allowlists for all ten agent tools;
-- `aml_agent.tool_runtime`: deterministic execution, local review-case action, export, and independent verification.
-- `aml_agent.agent`: bounded demo/live orchestration using the same production tools and audit store.
+- `aml_agent.analytics`: проверенная загрузка parquet, признаки направленного графа, детерминированные роли, Louvain-кластеры, ранжирование и побайтово стабильный CSV-экспорт;
+- `aml_agent.storage`: SQLite repositories для состояния и аудита, а также контролируемые write-once артефакты;
+- `aml_agent.tools`: строгие схемы и allowlist состояний для всех десяти tools агента;
+- `aml_agent.tool_runtime`: детерминированное выполнение, создание локального review case, экспорт и независимая проверка.
+- `aml_agent.agent`: ограниченный demo/live orchestrator, использующий рабочие tools и SQLite-аудит.
 
-Run the agent over the bundled dataset with no API key:
+Запуск агента на встроенном датасете без API-ключа:
 
-```bash
-.venv/bin/aml-agent-run --mode demo --data data --database var/agent.sqlite3 --artifacts artifacts
+```powershell
+.\.venv\Scripts\aml-agent-run.exe --mode demo --data data --database var\agent.sqlite3 --artifacts artifacts
 ```
 
-For live mode, install `backend[live]`, set `OPENAI_API_KEY` in the environment or ignored root `.env`, then run `aml-agent-run --mode live` with the same data and storage options.
+Для live-режима установите `backend[live]`, задайте `OPENAI_API_KEY` в окружении или игнорируемом корневом `.env` и запустите `aml-agent-run --mode live` с теми же параметрами данных и хранилища.
 
-Run the full offline workflow from the repository root:
+Запуск полного offline workflow из корня репозитория:
 
 ```powershell
 .\.venv\Scripts\aml-agent-tools.exe --data data --database var\aml-agent.sqlite3 --artifacts artifacts --top 20
 ```
 
-Run only the phase 1 analytical export:
+Запуск только аналитического экспорта фазы 1:
 
 ```powershell
 .\.venv\Scripts\aml-agent-pipeline.exe --data data --out out --top 20 --expected-seeds 81 --period-start 2026-07-01 --period-end 2026-07-31
 ```
 
-Run quality checks:
+Проверки качества:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest backend\tests -q
-.\.venv\Scripts\python.exe -m ruff check backend starter\starter.py
+.\.venv\Scripts\python.exe -m ruff check backend
 ```
 
-The public product description and environment setup live in the repository root `README.md`.
+Публичное описание продукта и настройка окружения находятся в корневом `README.md`.

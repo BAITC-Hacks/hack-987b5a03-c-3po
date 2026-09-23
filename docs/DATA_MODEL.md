@@ -1,175 +1,175 @@
-# AML Agent data model
+# Модель данных AML Agent
 
-## 1. Identifier rule
+## 1. Правило идентификаторов
 
-Source parquet and CSV files keep GIDs as `int64`. Every API, JSON, SQLite text column, frontend type, and tool argument represents a GID as a decimal string because the supplied values exceed JavaScript's safe integer range.
+В исходных parquet- и CSV-файлах GID хранится как `int64`. В API, JSON, текстовых колонках SQLite, frontend types и аргументах tools GID всегда представлен десятичной строкой, потому что значения превышают безопасный целочисленный диапазон JavaScript.
 
-## 2. Input records
+## 2. Входные записи
 
 ### NodeInput
 
-| Field | Type | Constraint |
+| Поле | Тип | Ограничение |
 |---|---|---|
-| `gid` | int64 | Unique in `nodes.parquet` |
-| `depth` | int | 0 through 4 |
-| `is_seed` | bool | Exactly 81 true values in the supplied dataset |
+| `gid` | int64 | Уникален в `nodes.parquet` |
+| `depth` | int | От 0 до 4 |
+| `is_seed` | bool | Ровно 81 значение true в предоставленном датасете |
 
 ### EdgeInput
 
-| Field | Type | Constraint |
+| Поле | Тип | Ограничение |
 |---|---|---|
-| `src` | int64 | Present in nodes |
-| `dst` | int64 | Present in nodes |
-| `sum_kzt` | float64 | At least 5,000; finite and positive |
-| `n_tx` | int64 | Positive |
-| `depth` | int8 | 1 through 4 |
+| `src` | int64 | Присутствует в nodes |
+| `dst` | int64 | Присутствует в nodes |
+| `sum_kzt` | float64 | Не меньше 5 000, конечное и положительное значение |
+| `n_tx` | int64 | Положительное значение |
+| `depth` | int8 | От 1 до 4 |
 
-`(src, dst)` is unique because edges are aggregated over the period.
+Пара `(src, dst)` уникальна, потому что рёбра агрегированы за весь период.
 
 ### TransactionInput
 
-| Field | Type | Constraint |
+| Поле | Тип | Ограничение |
 |---|---|---|
-| `src` | int64 | Present in nodes |
-| `dst` | int64 | Present in nodes |
-| `date` | date | Within the period declared by the trusted dataset registry |
-| `sum_kzt` | float64 | At least 5,000; finite and positive |
+| `src` | int64 | Присутствует в nodes |
+| `dst` | int64 | Присутствует в nodes |
+| `date` | date | В пределах периода из доверенного registry датасетов |
+| `sum_kzt` | float64 | Не меньше 5 000, конечное и положительное значение |
 
-Transactions grouped by `(src, dst)` must reproduce both `edges.sum_kzt` within 0.01 KZT and `edges.n_tx` exactly.
+Транзакции, сгруппированные по `(src, dst)`, должны воспроизводить `edges.sum_kzt` с точностью 0,01 KZT и точное значение `edges.n_tx`.
 
-## 3. Derived analytical records
+## 3. Производные аналитические записи
 
 ### NodeFeature
 
-| Field | Type | Meaning |
+| Поле | Тип | Значение |
 |---|---|---|
-| `run_id` | UUID | Owning analysis run |
-| `gid` | string | API-safe client identifier |
-| `depth` | int | Minimum observed traversal depth |
-| `is_seed` | bool | Seed flag |
-| `in_degree` / `out_degree` | int | Distinct counterparties |
-| `in_kzt` / `out_kzt` | float | Observed amounts inside the sample |
-| `in_tx` / `out_tx` | int | Observed transaction counts |
-| `pass_through_ratio` | float or null | `out_kzt / in_kzt`; null when unsupported |
-| `pagerank` | float | Directed amount-weighted PageRank |
-| `betweenness` | float | Deterministically sampled unweighted directed betweenness |
-| `seed_reach_count` | int | Number of seed nodes with a directed path to this node |
-| `rapid_outflow_ratio` | float or null | Share of outflow within two calendar days of any observed inflow |
-| `truncated_by_depth` | bool | Depth 4 with no visible outgoing edge |
-| `uncertainty_flags` | string array | Explicit data limitations for this node |
+| `run_id` | UUID | Run, которому принадлежит анализ |
+| `gid` | string | Безопасный для API идентификатор клиента |
+| `depth` | int | Минимальная наблюдаемая глубина обхода |
+| `is_seed` | bool | Флаг seed |
+| `in_degree` / `out_degree` | int | Уникальные контрагенты |
+| `in_kzt` / `out_kzt` | float | Наблюдаемые суммы внутри выборки |
+| `in_tx` / `out_tx` | int | Наблюдаемое количество транзакций |
+| `pass_through_ratio` | float или null | `out_kzt / in_kzt`; null, если показатель неприменим |
+| `pagerank` | float | Направленный PageRank со взвешиванием по сумме |
+| `betweenness` | float | Детерминированно выбранный приближённый невзвешенный направленный betweenness |
+| `seed_reach_count` | int | Число seed-узлов, из которых существует направленный путь к узлу |
+| `rapid_outflow_ratio` | float или null | Доля outflow в течение двух календарных дней после любого наблюдаемого inflow |
+| `truncated_by_depth` | bool | `depth=4` без видимого исходящего ребра |
+| `uncertainty_flags` | string array | Явные ограничения данных для узла |
 
-The temporal signal is supporting evidence only because transactions have dates but no timestamps.
+Временной сигнал является только вспомогательным evidence, потому что транзакции имеют даты, но не timestamps.
 
 ### NodeAssessment
 
-| Field | Type | Constraint |
+| Поле | Тип | Ограничение |
 |---|---|---|
-| `run_id` | UUID | Foreign key to run |
-| `gid` | string | Unique within run |
+| `run_id` | UUID | Foreign key на run |
+| `gid` | string | Уникален внутри run |
 | `role` | enum | `consolidator`, `transit`, `distributor`, `terminal`, `coordinator`, `peripheral` |
-| `role_score` | float | 0 through 1, rule strength rather than guilt probability |
-| `cluster_id` | int | Required for every node |
-| `priority_score` | float | 0 through 1 |
-| `evidence` | string | Non-empty, at most 200 characters, includes calculated values |
-| `ruleset_version` | string | Initially `v1` |
+| `role_score` | float | От 0 до 1; сила правила, а не вероятность виновности |
+| `cluster_id` | int | Обязателен для каждого узла |
+| `priority_score` | float | От 0 до 1 |
+| `evidence` | string | Непустая строка до 200 символов с рассчитанными значениями |
+| `ruleset_version` | string | Изначально `v1` |
 
-Role precedence for `v1` is `coordinator`, `consolidator`, `distributor`, `transit`, `terminal`, then `peripheral`. Boundary truncation prevents a terminal assignment based only on missing outflow.
+Приоритет ролей для `v1`: `coordinator`, `consolidator`, `distributor`, `transit`, `terminal`, затем `peripheral`. Усечение на границе запрещает назначать terminal только из-за отсутствующего outflow.
 
 ### ClusterAssessment
 
-| Field | Type | Constraint |
+| Поле | Тип | Ограничение |
 |---|---|---|
-| `run_id` | UUID | Owning run |
-| `cluster_id` | int | Unique within run |
-| `n_nodes` | int | Positive |
-| `n_seed` | int | Non-negative |
-| `sum_kzt_internal` | float | Non-negative |
-| `top_gids` | string array | Ranked identifiers |
-| `hypothesis` | string | Cautious, evidence-based description |
-| `algorithm` | string | `louvain` for MVP |
-| `random_seed` | int | Fixed at 42 for reproducibility |
+| `run_id` | UUID | Владеющий run |
+| `cluster_id` | int | Уникален внутри run |
+| `n_nodes` | int | Положительное значение |
+| `n_seed` | int | Неотрицательное значение |
+| `sum_kzt_internal` | float | Неотрицательное значение |
+| `top_gids` | string array | Ранжированные идентификаторы |
+| `hypothesis` | string | Осторожное описание на основе evidence |
+| `algorithm` | string | `louvain` для MVP |
+| `random_seed` | int | Зафиксирован как 42 для воспроизводимости |
 
 ### RankedTarget
 
-| Field | Type | Constraint |
+| Поле | Тип | Ограничение |
 |---|---|---|
-| `rank` | int | Starts at 1, no gaps |
-| `gid` | string | Unique within the list |
-| `role` | role enum | Copied from assessment |
-| `priority_score` | float | Descending order |
-| `why` | string | Numeric, cautious explanation |
+| `rank` | int | Начинается с 1, без пропусков |
+| `gid` | string | Уникален в списке |
+| `role` | role enum | Копируется из assessment |
+| `priority_score` | float | Порядок по убыванию |
+| `why` | string | Числовое осторожное объяснение |
 
-## 4. Operational records
+## 4. Операционные записи
 
 ### AnalysisRun
 
-| Field | Type | Meaning |
+| Поле | Тип | Значение |
 |---|---|---|
 | `run_id` | UUID | Primary key |
-| `dataset_id` | string | Logical dataset reference, not a path |
-| `dataset_sha256` | string | Reproducibility fingerprint |
-| `mode` | enum | `demo` or `live` |
-| `status` | enum | State machine value |
-| `ruleset_version` | string | Analytical rule version |
-| `model` | string or null | OpenAI model in live mode |
+| `dataset_id` | string | Логическая ссылка на датасет, не путь |
+| `dataset_sha256` | string | Fingerprint для воспроизводимости |
+| `mode` | enum | `demo` или `live` |
+| `status` | enum | Значение state machine |
+| `ruleset_version` | string | Версия аналитических правил |
+| `model` | string или null | Модель OpenAI в live mode |
 | `created_at` / `updated_at` | datetime | UTC timestamps |
-| `warning_count` | int | Number of persisted warnings |
-| `verification_status` | enum | `pending`, `passed`, or `failed` |
+| `warning_count` | int | Число сохранённых предупреждений |
+| `verification_status` | enum | `pending`, `passed` или `failed` |
 
-Run states:
+Состояния run:
 
 ```text
 created -> validated -> graph_ready -> analyzed -> clustered -> classified
         -> ranked -> case_created -> exported -> verified -> completed
 
-Any non-completed state may transition to failed; ranked/case_created/exported
-may transition to verification_failed. A completed run and its analytical
-snapshots, tool results, events, and artifact content are immutable.
+Любое незавершённое состояние может перейти в failed; ranked/case_created/exported
+могут перейти в verification_failed. Завершённый run и его аналитические
+snapshots, результаты tools, events и содержимое артефактов неизменяемы.
 ```
 
 ### AgentEvent
 
-| Field | Type | Meaning |
+| Поле | Тип | Значение |
 |---|---|---|
 | `event_id` | UUID | Primary key |
-| `run_id` | UUID | Owning run |
-| `sequence` | int | Monotonic per run |
+| `run_id` | UUID | Владеющий run |
+| `sequence` | int | Монотонно возрастает внутри run |
 | `kind` | enum | `started`, `tool_started`, `tool_completed`, `decision`, `action`, `warning`, `verification`, `failed`, `completed` |
-| `tool_name` | string or null | Registered tool only |
-| `summary` | string | Safe UI trace, no chain-of-thought |
-| `payload_json` | JSON | Sanitized structured metadata |
+| `tool_name` | string или null | Только зарегистрированный tool |
+| `summary` | string | Безопасный UI trace без chain-of-thought |
+| `payload_json` | JSON | Очищенные структурированные metadata |
 | `created_at` | datetime | UTC timestamp |
 
 ### ReviewCase
 
-| Field | Type | Meaning |
+| Поле | Тип | Значение |
 |---|---|---|
 | `case_id` | UUID | Primary key |
-| `run_id` | UUID | Source run, unique for MVP |
-| `title` | string | One of the fixed server-approved cautious review labels |
+| `run_id` | UUID | Исходный run, уникален для MVP |
+| `title` | string | Одна из фиксированных осторожных меток, утверждённых сервером |
 | `status` | enum | `ready_for_review`, `in_review`, `closed` |
-| `target_gids` | string array | Immutable target snapshot |
-| `created_by` | enum | `agent` or `analyst` |
+| `target_gids` | string array | Неизменяемый snapshot целей |
+| `created_by` | enum | `agent` или `analyst` |
 | `created_at` | datetime | UTC timestamp |
 
 ### Artifact
 
-| Field | Type | Meaning |
+| Поле | Тип | Значение |
 |---|---|---|
 | `artifact_id` | UUID | Primary key |
-| `run_id` | UUID | Owning run |
+| `run_id` | UUID | Владеющий run |
 | `name` | enum | `nodes_roles.csv`, `clusters.csv`, `top_nodes.csv`, `audit.json` |
-| `relative_path` | string | Path beneath the run artifact directory |
-| `sha256` | string | Integrity fingerprint |
-| `row_count` | int or null | CSV verification value |
+| `relative_path` | string | Путь внутри директории артефактов run |
+| `sha256` | string | Fingerprint целостности |
+| `row_count` | int или null | Значение проверки CSV |
 
-## 5. CSV contracts
+## 5. Контракты CSV
 
 ### nodes_roles.csv
 
 `gid,role,role_score,cluster_id,priority_score,evidence`
 
-Exactly 2,248 rows for the supplied dataset. Extra analytical columns may be appended, but required columns cannot be renamed or removed.
+Ровно 2 248 строк для предоставленного датасета. Дополнительные аналитические колонки можно добавлять, но обязательные колонки нельзя переименовывать или удалять.
 
 ### clusters.csv
 
@@ -179,14 +179,14 @@ Exactly 2,248 rows for the supplied dataset. Extra analytical columns may be app
 
 `rank,gid,role,priority_score,why`
 
-At least 20 rows in descending priority order.
+Не менее 20 строк по убыванию priority.
 
-## 6. Core invariants
+## 6. Основные инварианты
 
-1. A run cannot be completed unless verification passes.
-2. Every input node has exactly one NodeAssessment and cluster ID.
-3. Model-generated text cannot change an analytical value.
-4. Evidence is reproducible from persisted features and ruleset version.
-5. Orphan seed nodes remain in outputs and receive a documented low-evidence assessment.
-6. Re-running the same dataset and ruleset produces the same analytical outputs.
-7. Verification recomputes authoritative roles, scores, evidence, clusters, and ranking from the registered input rather than trusting exported values.
+1. Run нельзя завершить без успешной verification.
+2. Каждый входной узел имеет ровно один NodeAssessment и один cluster ID.
+3. Текст модели не может изменить аналитическое значение.
+4. Evidence воспроизводится из сохранённых признаков и версии ruleset.
+5. Изолированные seed остаются в результатах и получают документированную оценку с низким evidence.
+6. Повторный запуск одного датасета и ruleset создаёт одинаковые аналитические результаты.
+7. Verification заново рассчитывает authoritative roles, scores, evidence, clusters и ranking по зарегистрированным входным данным, не доверяя экспортированным значениям.

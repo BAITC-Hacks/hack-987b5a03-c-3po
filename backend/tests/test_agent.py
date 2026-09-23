@@ -530,7 +530,7 @@ class CatalogTests(unittest.TestCase):
     def test_terminal_schema_matches_documented_contract(self) -> None:
         document = (Path(__file__).resolve().parents[2] / "docs" / "AGENT_LOOP.md").read_text()
         block = (
-            document.split("## 7. Terminal decision schema", 1)[1]
+            document.split("## 7.", 1)[1]
             .split("```json", 1)[1]
             .split("```", 1)[0]
         )
@@ -539,7 +539,7 @@ class CatalogTests(unittest.TestCase):
     def test_published_schemas_match_code(self) -> None:
         document = (Path(__file__).resolve().parents[2] / "docs" / "TOOLS.md").read_text()
         block = (
-            document.split("The canonical input definitions are:", 1)[1]
+            document.split("## 3.", 1)[1]
             .split("```json", 1)[1]
             .split("```", 1)[0]
         )
