@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aml-agent-backend"
+version = "0.1.0"
+description = "Deterministic analytics, tools, and verification core for AML Agent"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "jsonschema>=4.23,<5",
+  "networkx>=3.2,<4",
+  "numpy>=1.26,<3",
+  "pandas>=2.2,<3",
+  "pyarrow>=14,<24",
+  "pydantic>=2.8,<3",
+  "scipy>=1.11,<2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<10",
+  "pytest-cov>=5,<8",
+  "ruff>=0.8,<1",
+]
+
+[project.scripts]
+aml-agent-pipeline = "aml_agent.cli:pipeline_main"
+aml-agent-tools = "aml_agent.cli:tools_main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["aml_agent*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

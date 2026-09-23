@@ -21,9 +21,9 @@
 import argparse
 from pathlib import Path
 
+import networkx as nx
 import numpy as np
 import pandas as pd
-import networkx as nx
 
 ROLES = ["consolidator", "transit", "distributor", "terminal", "coordinator", "peripheral"]
 
@@ -61,7 +61,7 @@ def sanity_check(edges, nodes, tx):
     orphans = set(nodes.gid) - in_edges
     print(f"\n  ВНИМАНИЕ: {len(orphans)} узлов нет ни в одном ребре "
           f"(из них seed: {len(orphans & set(nodes[nodes.is_seed].gid))})")
-    print("  → они всё равно должны попасть в nodes_roles.csv")
+    print("  -> они всё равно должны попасть в nodes_roles.csv")
     print("=" * 64, "\n")
     return orphans
 
