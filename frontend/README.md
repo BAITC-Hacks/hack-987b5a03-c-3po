@@ -1,16 +1,16 @@
-# Phase 5 frontend
+# Frontend фазы 5
 
-React, Vite, TypeScript, and Cytoscape.js interface for the bundled AML Agent workflow. All run results come from the Phase 4 API; the browser does not calculate roles, scores, clusters, or verification.
+Интерфейс на React, Vite, TypeScript и Cytoscape.js для встроенного workflow AML Agent. Все результаты run поступают из API фазы 4; браузер не рассчитывает роли, scores, кластеры или результат verification.
 
-## Run locally
+## Локальный запуск
 
-Start the API from the repository root using the setup in [docs/API.md](../docs/API.md):
+Запустите API из корня репозитория по инструкции в [docs/API.md](../docs/API.md):
 
 ```bash
 python -m uvicorn backend.app.main:create_app --factory --host 127.0.0.1 --port 8000 --workers 1
 ```
 
-Then start the UI in another terminal:
+Затем запустите UI в другом терминале:
 
 ```bash
 cd frontend
@@ -18,16 +18,18 @@ npm ci
 npm run dev
 ```
 
-Open <http://127.0.0.1:5173>. Vite proxies `/health` and `/api` to port 8000. `npm run build` runs the TypeScript check and creates static assets. The production Nginx configuration proxies the same routes to the backend service.
+Откройте <http://127.0.0.1:5173>. Vite проксирует `/health` и `/api` на порт 8000. Команда `npm run build` запускает проверку TypeScript и создаёт статические assets. Production-конфигурация Nginx проксирует те же маршруты в backend-сервис.
 
-## Workflow
+## Рабочий процесс
 
-1. Click **Start bundled demo**. The UI creates a run with logical dataset ID `bundled`, opens the safe SSE trace, and starts execution.
-2. Follow persisted status and tool events while deterministic analytics, case creation, export, and verification run.
-3. After independent verification passes, inspect the top 20 assessments, cluster summaries, a directed one or two hop ego graph, and node evidence. The Phase 4 API intentionally serves analytical read endpoints only for completed, verified runs.
-4. Download the three CSV files and audit record. Downloads are enabled only for a completed run with `verification_status=passed`.
-5. Use **Reset demo** after the run ends. Reset removes demo-owned server state, and the UI clears its stored run ID.
+1. Оставьте режим **Demo** и нажмите **Start bundled demo**. UI создаст run с логическим ID датасета `bundled`, откроет безопасный SSE trace и запустит выполнение.
+2. Следите за сохранённым status и событиями tools во время детерминированной аналитики, создания case, экспорта и verification.
+3. После успешной независимой проверки изучите top-20 оценок, сводки кластеров, направленный ego graph на один или два перехода и evidence узлов. API фазы 4 намеренно открывает аналитические endpoints чтения только для завершённых и проверенных runs.
+4. Скачайте три CSV-файла и запись аудита. Скачивание доступно только для завершённого run со значением `verification_status=passed`.
+5. После завершения run используйте **Reset demo**. Сброс удаляет серверное состояние, принадлежащее demo, а UI очищает сохранённый ID run.
 
-The UI keeps only the current demo run ID in browser session storage. A refresh reconnects to persisted status and replays safe events. GIDs stay decimal strings throughout the browser, including node search and Cytoscape element IDs.
+Если backend запущен с непустым `OPENAI_API_KEY`, интерфейс также разрешает режим **OpenAI live**. В нём модель выбирает те же контролируемые tools, а роли, scores, review case, exports и verification остаются детерминированными. Для live-run кнопка **New run** очищает только локальную браузерную сессию и не удаляет сохранённый серверный audit.
 
-The HTTP and SSE contract is [docs/API.md](../docs/API.md), with response models in [`backend/app/api/schemas.py`](../backend/app/api/schemas.py). The client adapter is [`src/api.ts`](src/api.ts).
+UI хранит в session storage браузера только ID текущего demo-run. После обновления страницы он повторно подключается к сохранённому status и воспроизводит безопасные события. Во всём браузерном приложении GID остаются десятичными строками, включая поиск узлов и ID элементов Cytoscape.
+
+Контракт HTTP и SSE описан в [docs/API.md](../docs/API.md), модели ответов находятся в [`backend/app/api/schemas.py`](../backend/app/api/schemas.py), а клиентский адаптер — в [`src/api.ts`](src/api.ts).

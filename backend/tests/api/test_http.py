@@ -59,6 +59,14 @@ def test_http_golden_path_contract(client, backend, executor):
         assert download.headers["etag"] == f'"{hashlib.sha256(download.content).hexdigest()}"'
         assert len(list(csv.DictReader(io.StringIO(download.text)))) == count
     assert client.get(base + "/artifacts/audit.json").json()["passed"] is True
+    workbook = client.get(base + "/artifacts/aml_review_report.xlsx")
+    assert workbook.status_code == 200
+    assert workbook.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    assert workbook.headers["content-disposition"] == (
+        'attachment; filename="aml_review_report.xlsx"'
+    )
     repeated = client.post(base + "/execute")
     assert repeated.status_code == 200 and repeated.json()["started"] is False
     assert executor.calls == backend.claims == backend.releases == 1

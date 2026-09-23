@@ -14,6 +14,7 @@ import io
 import json
 import math
 import re
+import zipfile
 from collections import Counter, deque
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
@@ -23,6 +24,7 @@ from datetime import date as Date
 from pathlib import Path
 from typing import Any, Final
 from uuid import UUID
+from xml.etree import ElementTree
 
 import networkx as nx
 import numpy as np
@@ -47,8 +49,14 @@ from aml_agent.analytics.exports import (
     NODES_ROLES_COLUMNS,
     TOP_NODES_COLUMNS,
 )
+from aml_agent.analytics.review_workbook import (
+    REPORT_ARTIFACT_NAME,
+    REPORT_SHEET_NAMES,
+    build_review_workbook,
+)
 from aml_agent.storage import (
     MANDATORY_ARTIFACT_NAMES,
+    READER_ARTIFACT_NAMES,
     ArtifactStore,
     ArtifactStoreError,
     Database,
@@ -705,6 +713,18 @@ class ToolRuntime:
             raise _ToolFailure("EXPORT_FAILED", "A review case is required before export.")
         self._persist_tool_intent("export_results", arguments)
         try:
+            run = self.database.require_run(run_id)
+            audit_payload = {
+                "schema_version": "v1",
+                "run_id": run_id,
+                "dataset_id": run.dataset_id,
+                "dataset_sha256": cache.dataset.sha256,
+                "ruleset_version": RULESET_VERSION,
+                "case_id": review_case.case_id,
+                "target_gids": list(review_case.target_gids),
+                "node_count": int(len(cache.assessments)),
+                "cluster_count": int(len(cache.clusters)),
+            }
             stored = [
                 self.artifact_store.write_csv(
                     run_id,
@@ -724,23 +744,22 @@ class ToolRuntime:
                     _TOP_HEADERS,
                     _frame_records(cache.top_nodes, _TOP_HEADERS, gid_fields={"gid"}),
                 ),
+                self.artifact_store.write_bytes(
+                    run_id,
+                    REPORT_ARTIFACT_NAME,
+                    build_review_workbook(
+                        cache.assessments,
+                        cache.clusters,
+                        cache.top_nodes,
+                        audit_payload,
+                    ),
+                ),
             ]
             if arguments["include_audit"]:
-                run = self.database.require_run(run_id)
                 stored.append(
                     self.artifact_store.write_json(
                         run_id,
-                        {
-                            "schema_version": "v1",
-                            "run_id": run_id,
-                            "dataset_id": run.dataset_id,
-                            "dataset_sha256": cache.dataset.sha256,
-                            "ruleset_version": RULESET_VERSION,
-                            "case_id": review_case.case_id,
-                            "target_gids": list(review_case.target_gids),
-                            "node_count": int(len(cache.assessments)),
-                            "cluster_count": int(len(cache.clusters)),
-                        },
+                        audit_payload,
                     )
                 )
             for artifact in stored:
@@ -839,8 +858,8 @@ class ToolRuntime:
         records = {artifact.name: artifact for artifact in self.database.list_artifacts(run_id)}
         record(
             "mandatory_artifacts_registered",
-            set(MANDATORY_ARTIFACT_NAMES).issubset(records),
-            "all three mandatory CSV records are registered",
+            set(MANDATORY_ARTIFACT_NAMES | READER_ARTIFACT_NAMES).issubset(records),
+            "all three mandatory CSV records and the Excel report are registered",
         )
 
         parsed: dict[str, tuple[tuple[str, ...], list[dict[str, str]]]] = {}
@@ -884,6 +903,34 @@ class ToolRuntime:
                 )
             except Exception:
                 record("audit.json:integrity", False, "optional audit is malformed")
+
+        report = records.get(REPORT_ARTIFACT_NAME)
+        if report is not None:
+            try:
+                report_raw = self.artifact_store.read_bytes(run_id, REPORT_ARTIFACT_NAME)
+                report_valid = (
+                    hashlib.sha256(report_raw).hexdigest() == report.sha256
+                    and len(report_raw) == report.size_bytes
+                    and report.row_count is None
+                    and _xlsx_sheet_names(report_raw) == REPORT_SHEET_NAMES
+                )
+                record(
+                    f"{REPORT_ARTIFACT_NAME}:integrity",
+                    report_valid,
+                    "Excel hash, size, package structure, and sheet names match",
+                )
+            except Exception:
+                record(
+                    f"{REPORT_ARTIFACT_NAME}:integrity",
+                    False,
+                    "Excel review report is malformed",
+                )
+        else:
+            record(
+                f"{REPORT_ARTIFACT_NAME}:integrity",
+                False,
+                "Excel review report is missing",
+            )
 
         node_rows: list[dict[str, str]] = []
         cluster_rows: list[dict[str, str]] = []
@@ -1359,6 +1406,20 @@ def _read_csv(raw: bytes) -> tuple[tuple[str, ...], list[dict[str, str]]]:
     if any(None in row for row in rows):
         raise ValueError("CSV contains fields beyond its header")
     return tuple(reader.fieldnames), rows
+
+
+def _xlsx_sheet_names(raw: bytes) -> tuple[str, ...]:
+    """Read workbook sheet names without trusting a spreadsheet engine."""
+
+    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+        if "xl/workbook.xml" not in archive.namelist():
+            raise ValueError("XLSX workbook part is missing")
+        root = ElementTree.fromstring(archive.read("xl/workbook.xml"))
+    namespace = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+    return tuple(
+        sheet.attrib["name"]
+        for sheet in root.findall(f"{namespace}sheets/{namespace}sheet")
+    )
 
 
 def _validate_node_rows(

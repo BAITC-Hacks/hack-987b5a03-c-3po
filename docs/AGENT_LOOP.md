@@ -16,7 +16,7 @@ Orchestrator — ограниченная state machine, а не открыты�
 Содержимое parquet целиком, полные выгрузки графа, секреты, локальные пути, SQL и внутренние stack traces никогда не отправляются модели.
 Цепочка Responses хранится только во время текущего выполнения. Возобновлённый run начинает новую цепочку по сохранённому состоянию и ranking snapshot, без хранения transcript модели.
 
-## 3. State machine
+## 3. Автомат состояний
 
 ```text
 created
@@ -89,7 +89,7 @@ async def execute_run(run_id: UUID) -> AgentDecision:
 
 За одну итерацию разрешён только один tool, изменяющий состояние. Read-only вызовы `get_node_evidence` можно объединять максимум для трёх целей.
 
-## 5. Контракт system instruction
+## 5. Контракт системной инструкции
 
 Production system instruction обязана закреплять следующие правила:
 
@@ -104,7 +104,7 @@ Production system instruction обязана закреплять следующ
 - Run считается завершённым, только когда `verify_run` возвращает `passed: true`.
 - Не раскрывай hidden reasoning. Возвращай только короткие решения и безопасные сводки tools.
 
-## 6. Интерфейс provider
+## 6. Интерфейс провайдера
 
 ```python
 class AgentProvider(Protocol):
@@ -116,7 +116,7 @@ class AgentProvider(Protocol):
     ) -> ProviderResponse: ...
 ```
 
-### OpenAIResponsesProvider
+### Провайдер `OpenAIResponsesProvider`
 
 - Использует официальный OpenAI Python SDK и Responses API.
 - Читает модель и timeout из settings.
@@ -124,7 +124,7 @@ class AgentProvider(Protocol):
 - Возвращает нормализованные вызовы с `call_id`, именем tool и проверенными аргументами.
 - Использует Structured Outputs для конечного `AgentDecision`.
 
-### DeterministicDemoProvider
+### Провайдер `DeterministicDemoProvider`
 
 - Использует то же сохранённое состояние и тот же registry tools.
 - Выбирает единственный допустимый следующий изменяющий состояние tool по статической политике.
@@ -181,7 +181,7 @@ class AgentProvider(Protocol):
 | Ошибка verification | Сохранить failed checks; не помечать run завершённым |
 | Бюджет tools исчерпан | Безопасно завершить с ошибкой и сохранить выполненные артефакты для диагностики |
 
-## 9. Политика UI trace
+## 9. Политика трассировки в UI
 
 Разрешённое содержимое trace:
 
@@ -201,7 +201,7 @@ OK all mandatory checks passed
 
 Нельзя показывать prompts, hidden reasoning, token-level thoughts, stack traces, секреты и неограниченный raw output tools.
 
-## 10. Критерии завершения golden path
+## 10. Критерии завершения основного сценария
 
 Цикл считается успешным только если:
 

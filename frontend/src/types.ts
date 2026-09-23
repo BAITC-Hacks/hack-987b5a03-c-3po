@@ -137,4 +137,8 @@ export interface ReviewCase {
 }
 
 export type ArtifactName =
-  "nodes_roles.csv" | "clusters.csv" | "top_nodes.csv" | "audit.json";
+  | "nodes_roles.csv"
+  | "clusters.csv"
+  | "top_nodes.csv"
+  | "aml_review_report.xlsx"
+  | "audit.json";

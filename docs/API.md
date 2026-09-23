@@ -1,124 +1,132 @@
-# Phase 4 HTTP API and integration contract
+# HTTP API фазы 4 и контракт интеграции
 
-## Implementation status
+## Статус реализации
 
-The default `backend.app.main.create_app` factory connects the Phase 1–2 analytics,
-storage, tools, and verification to the Phase 3 orchestrator. It runs the actual
-bundled dataset through the Phase 4 HTTP API. `/health` returns HTTP 200 with
-`backend_ready: true` when SQLite and the bundled parquet files are available.
-For isolated contract tests, `create_app(settings, integrate=False)` leaves the
-backend unconfigured and reports `backend_ready: false`.
+Стандартная фабрика `backend.app.main.create_app` соединяет аналитику, хранилище,
+tools и verification фаз 1–2 с orchestrator фазы 3. Через HTTP API фазы 4 она
+обрабатывает настоящий встроенный датасет. `/health` возвращает HTTP 200 и
+`backend_ready: true`, когда доступны SQLite и встроенные parquet-файлы.
+Для изолированных тестов контракта вызов `create_app(settings, integrate=False)`
+оставляет backend ненастроенным и возвращает `backend_ready: false`.
 
-`backend/tests/api/fakes.py` contains test doubles only. Neither this module nor
-its fabricated assessments are imported by the application or used in demo mode.
-The real HTTP golden-path test runs create, execute, event replay, queries, case,
-downloads, restart, and demo reset against the bundled dataset.
+Файл `backend/tests/api/fakes.py` содержит только тестовые заглушки. Ни этот
+модуль, ни созданные им искусственные оценки не импортируются приложением и не
+используются в demo-режиме. Настоящий HTTP-тест golden path проверяет создание и
+выполнение run, повторное воспроизведение событий, запросы, case, скачивание,
+перезапуск и сброс demo на встроенном датасете.
 
-## Launch and settings
+## Запуск и настройки
 
-Run from the repository root with Python 3.12+ after installing
-`backend/requirements.lock`, editable `backend`, and
+Запускайте из корня репозитория с Python 3.12+ после установки
+`backend/requirements.lock`, пакета `backend` в редактируемом режиме и
 `backend/requirements-api.txt`:
 
 ```bash
 python -m uvicorn backend.app.main:create_app --factory --host 127.0.0.1 --port 8000 --workers 1
 ```
 
-Settings read the repository-root `.env`, with environment variables taking
-precedence. Paths in settings are relative to the repository root. API payloads
-never accept filesystem paths. `DATABASE_URL` must reference a local SQLite file;
-the Phase 4 adapter initializes it and preserves completed state across restarts.
+Настройки читаются из корневого `.env`; переменные окружения имеют приоритет.
+Пути в настройках задаются относительно корня репозитория. API никогда не
+принимает пути файловой системы в payload. `DATABASE_URL` должен ссылаться на
+локальный файл SQLite; адаптер фазы 4 инициализирует его и сохраняет завершённое
+состояние между перезапусками.
 
-Important settings from `.env.example`:
+Основные параметры из `.env.example`:
 
-| Variable | Default | Effect |
+| Переменная | Значение по умолчанию | Назначение |
 |---|---|---|
-| `DEMO_MODE` | `true` | Default mode for new runs and whether demo reset is enabled |
-| `OPENAI_API_KEY` | empty | Stored as a secret; required only to execute a live run |
-| `OPENAI_MODEL` | `gpt-5-mini` | Passed to the backend when creating a live run |
-| `CORS_ORIGINS` | `http://localhost:5173` | Comma-separated exact HTTP origins, no wildcard |
-| `API_MAX_ACTIVE_RUNS` | `2` | Maximum concurrent executions in this process (1–8) |
-| `API_EXECUTION_TIMEOUT_SECONDS` | `300` | Cooperative execution deadline (up to 900 seconds) |
-| `SSE_POLL_SECONDS` | `0.25` | Interval for querying persisted events |
-| `SSE_HEARTBEAT_SECONDS` | `15` | Idle connection heartbeat interval |
-| `SSE_MAX_STREAMS` | `32` | Maximum concurrent streams in this process (1–256) |
+| `DEMO_MODE` | `true` | Режим новых runs по умолчанию и доступность сброса demo |
+| `OPENAI_API_KEY` | пусто | Хранится как секрет; требуется только для выполнения live-run |
+| `OPENAI_MODEL` | `gpt-5-mini` | Передаётся backend при создании live-run |
+| `CORS_ORIGINS` | `http://localhost:5173` | Точные HTTP origins через запятую, без wildcard |
+| `API_MAX_ACTIVE_RUNS` | `2` | Максимум одновременных выполнений в этом процессе (1–8) |
+| `API_EXECUTION_TIMEOUT_SECONDS` | `300` | Кооперативный срок выполнения, до 900 секунд |
+| `SSE_POLL_SECONDS` | `0.25` | Интервал опроса сохранённых событий |
+| `SSE_HEARTBEAT_SECONDS` | `15` | Интервал heartbeat для неактивного соединения |
+| `SSE_MAX_STREAMS` | `32` | Максимум одновременных потоков в этом процессе (1–256) |
 
-The explicit Uvicorn command controls bind address/port. `BACKEND_HOST` and
-`BACKEND_PORT` are validated settings available to future launchers, not implicit
-overrides of Uvicorn CLI flags. Use one API process for this MVP; execution limits,
-SSE connection accounting, and cancellation coordination are process-local.
+Явная команда Uvicorn задаёт адрес и порт. `BACKEND_HOST` и `BACKEND_PORT` —
+проверяемые настройки для будущих способов запуска, а не неявные переопределения
+флагов командной строки Uvicorn. Для этого MVP используйте один процесс API:
+лимиты выполнения, учёт SSE-соединений и координация отмены локальны для процесса.
 
-`live_configured` in health means only that a non-empty key is configured; it does
-not test key validity or external API availability. Health never returns key
-values, settings dumps, database paths, or model output.
+Поле `live_configured` в health означает только наличие непустого ключа. Оно не
+проверяет действительность ключа или доступность внешнего API. Health никогда не
+возвращает значения ключей, полный набор настроек, пути к базе или output модели.
 
-## Endpoints
+## Маршруты API
 
-Interactive schemas, all query parameters, and complete response fields are in
-`/docs` and `/openapi.json`; API DTOs live in `backend/app/api/schemas.py`.
+Интерактивные схемы, все query-параметры и полные поля ответов доступны в
+`/docs` и `/openapi.json`; DTO API находятся в `backend/app/api/schemas.py`.
 
-| Method | Path | Response / behavior |
+| Метод | Путь | Ответ / поведение |
 |---|---|---|
-| GET | `/health` | 200 liveness/mode/readiness; 503 when an attached backend health check fails |
-| POST | `/api/runs` | 201 `RunView` plus `Location`; body `{ "dataset_id": "bundled", "mode": "demo" }` |
-| POST | `/api/runs/{run_id}/execute` | 202 execution accepted/already active; 200 for an immutable completed run |
-| GET | `/api/runs/{run_id}` | State, executing flag, counts, warnings, case ID, verification, terminal decision |
-| GET | `/api/runs/{run_id}/events` | Persisted SSE events; supports replay, follow, and reconnect |
-| GET | `/api/runs/{run_id}/nodes` | Paginated and filterable verified assessments |
-| GET | `/api/runs/{run_id}/nodes/{gid}` | Node assessment, cluster, and bounded directed ego graph |
-| GET | `/api/runs/{run_id}/clusters` | Paginated verified cluster summaries |
-| GET | `/api/cases/{case_id}` | Case with ordered immutable target snapshot |
-| GET | `/api/runs/{run_id}/artifacts/{name}` | Verified bytes with attachment filename and SHA-256 ETag |
-| POST | `/api/demo/reset` | Count of removed demo runs; live state must be preserved |
+| GET | `/health` | 200: liveness, режим и готовность; 503 при ошибке подключённой проверки backend |
+| POST | `/api/runs` | 201: `RunView` и `Location`; body `{ "dataset_id": "bundled", "mode": "demo" }` |
+| POST | `/api/runs/{run_id}/execute` | 202: выполнение принято или уже активно; 200 для неизменяемого завершённого run |
+| GET | `/api/runs/{run_id}` | Состояние, флаг выполнения, счётчики, предупреждения, ID case, verification и конечное решение |
+| GET | `/api/runs/{run_id}/events` | Сохранённые SSE-события с повторным воспроизведением, ожиданием и переподключением |
+| GET | `/api/runs/{run_id}/nodes` | Пагинируемые и фильтруемые проверенные оценки |
+| GET | `/api/runs/{run_id}/nodes/{gid}` | Оценка узла, кластер и ограниченный направленный ego graph |
+| GET | `/api/runs/{run_id}/clusters` | Пагинируемые проверенные сводки кластеров |
+| GET | `/api/cases/{case_id}` | Case с упорядоченным неизменяемым snapshot целей |
+| GET | `/api/runs/{run_id}/artifacts/{name}` | Проверенные байты с именем вложения и SHA-256 ETag |
+| POST | `/api/demo/reset` | Число удалённых demo-runs; live-состояние должно сохраниться |
 
-`dataset_id` defaults to `bundled`; arbitrary uploads and paths are unsupported.
-`mode` defaults to settings. Extra request body fields are rejected. Run and case
-IDs must be UUIDs. GIDs are canonical non-negative int64 decimal **strings** in
-all JSON positions, including graph endpoints, cluster leaders, and case targets.
-Numeric JSON GIDs, floats, scientific notation, and leading-zero aliases are rejected.
-CSV bytes are served unchanged: conversion from source int64 belongs to Phase 1/2 export.
+По умолчанию `dataset_id` равен `bundled`; произвольные загрузки и пути не
+поддерживаются. Значение `mode` по умолчанию берётся из настроек. Дополнительные
+поля body отклоняются. ID run и case должны быть UUID. Во всех позициях JSON,
+включая endpoints графа, лидеров кластеров и цели case, GID передаются как
+канонические неотрицательные десятичные **строки** int64. Числовые GID в JSON,
+float, научная нотация и варианты с ведущими нулями отклоняются. Байты CSV
+возвращаются без изменений: преобразование исходного int64 относится к экспорту
+фаз 1–2.
 
-Creating a run does not execute it. `executing` is separate from the analytical
-state from AGENT_LOOP.md, including `clustered` and `exported`. Repeat execute
-requests cannot claim the same active/completed run twice. Intermediate committed
-states can resume after restart when the adapter recovers stale claims. Terminal
-`failed` and `verification_failed` runs require a new run. A missing live key
-returns `409 OPENAI_KEY_REQUIRED` before claiming execution and leaves the run
-available for a later retry after local configuration is fixed.
+Создание run не запускает его. Поле `executing` отделено от аналитического
+состояния из `AGENT_LOOP.md`, включая `clustered` и `exported`. Повторные запросы
+на выполнение не могут повторно захватить активный или завершённый run.
+Промежуточные зафиксированные состояния можно продолжить после перезапуска,
+когда адаптер восстановит устаревшие claims. Для конечных состояний `failed` и
+`verification_failed` требуется новый run. При отсутствии ключа для live-режима
+API возвращает `409 OPENAI_KEY_REQUIRED` до захвата выполнения и оставляет run
+доступным для повтора после исправления локальной конфигурации.
 
-## Pagination, sorting, and graph bounds
+## Пагинация, сортировка и границы графа
 
-Nodes and clusters return `{ "items": [...], "total": 25, "offset": 0, "limit": 20 }`.
-`offset` defaults to 0 and `limit` to 20; maximum limit is 200. `total` is after
-filtering. An offset past the end returns an empty items array.
+Узлы и кластеры возвращают `{ "items": [...], "total": 25, "offset": 0, "limit": 20 }`.
+По умолчанию `offset` равен 0, `limit` — 20; максимальный limit равен 200. Поле
+`total` рассчитывается после фильтрации. Если offset выходит за конец списка,
+возвращается пустой массив `items`.
 
-Node filters combine with AND: `gid` (exact string match), `role`, `cluster_id`,
-`is_seed`, `truncated_by_depth`. Nodes sort by persisted `priority_score` descending,
-then persisted `role_score` descending, then integer GID ascending without a
-floating-point conversion. Clusters sort by `cluster_id` ascending. The query
-service never calculates or changes roles or scores.
+Фильтры узлов объединяются оператором AND: `gid` (точное совпадение строки),
+`role`, `cluster_id`, `is_seed`, `truncated_by_depth`. Узлы сортируются по
+сохранённому `priority_score` по убыванию, затем по сохранённому `role_score` по
+убыванию и по целочисленному GID по возрастанию без преобразования в float.
+Кластеры сортируются по `cluster_id` по возрастанию. Query service никогда не
+рассчитывает и не изменяет роли или scores.
 
-Ego parameters are `neighbor_hops=1` (1–2), `max_nodes=100` (1–200), and
-`max_edges=200` (1–500). Traversal considers both incoming and outgoing neighbors;
-returned edges keep their original `src` and `dst`. The center is always included.
-Nodes are selected by distance, then numeric GID; induced edges are ordered by
-numeric `(src, dst)`. `truncated=true` means a node or edge limit omitted data.
-An isolated node returns itself and no edges. The implementation scans stored
-batch-sized records in Python; a large-graph adapter should push bounded queries
-into storage while retaining these HTTP semantics.
+Параметры ego graph: `neighbor_hops=1` (1–2), `max_nodes=100` (1–200) и
+`max_edges=200` (1–500). Обход учитывает входящих и исходящих соседей; возвращённые
+рёбра сохраняют исходные `src` и `dst`. Центральный узел включается всегда. Узлы
+выбираются по расстоянию, затем по числовому GID; индуцированные рёбра упорядочены
+по числовой паре `(src, dst)`. `truncated=true` означает, что лимит узлов или рёбер
+исключил часть данных. Изолированный узел возвращается без рёбер. Реализация
+просматривает сохранённые записи пакетами в Python; адаптер для большого графа
+должен перенести ограниченные запросы в storage, сохранив эту HTTP-семантику.
 
 ## SSE
 
-Connect before or during execution, or replay after completion:
+Подключайтесь до или во время выполнения либо воспроизводите события после
+завершения:
 
 ```bash
 curl -N "http://127.0.0.1:8000/api/runs/RUN_ID/events?after=0"
 curl -N -H "Last-Event-ID: 12" "http://127.0.0.1:8000/api/runs/RUN_ID/events"
 ```
 
-Replace `RUN_ID` with the UUID returned by create. `after` is an exclusive
-non-negative sequence cursor. `Last-Event-ID` takes precedence when present and
-is validated independently. The SSE ID is the run-local sequence, not event UUID.
+Замените `RUN_ID` на UUID, возвращённый при создании. `after` — исключающий
+неотрицательный sequence cursor. При наличии `Last-Event-ID` имеет приоритет и
+проверяется независимо. ID события SSE — локальный sequence run, а не UUID события.
 
 ```text
 id: 13
@@ -127,31 +135,37 @@ data: {"event_id":"...","run_id":"...","sequence":13,"kind":"verification",...}
 
 ```
 
-The initial comment includes `retry: 1000`. Heartbeats are SSE comments, not
-persisted tool events. `follow=false` drains current events and returns immediately;
-default `follow=true` polls until a terminal state or a `needs_user_action` decision.
-Terminal streams drain all remaining events, including more than one 100-event
-batch, before closing. Clients should stop reconnecting once run status is terminal.
-Disconnects free the stream slot without canceling the execution. After headers
-are sent, a read failure emits `event: error` with a safe code and closes the stream.
-No prompts, hidden reasoning, raw model responses, or stack traces are streamed.
+Начальный комментарий содержит `retry: 1000`. Heartbeats — комментарии SSE, а не
+сохранённые события tools. При `follow=false` текущие события выдаются сразу и
+соединение закрывается; по умолчанию `follow=true` выполняет опрос до конечного
+состояния или решения `needs_user_action`. Конечные потоки перед закрытием выдают
+все оставшиеся события, даже если требуется больше одного пакета по 100 событий.
+Клиентам следует прекратить переподключение после перехода run в конечное
+состояние. Отключение освобождает слот потока, не отменяя выполнение. Если после
+отправки headers чтение завершается ошибкой, поток отправляет `event: error` с
+безопасным кодом и закрывается. Prompts, hidden reasoning, необработанные ответы
+модели и stack traces через поток не передаются.
 
-## Artifacts, reset, and errors
+## Артефакты, сброс и ошибки
 
-Only `nodes_roles.csv`, `clusters.csv`, `top_nodes.csv`, and `audit.json` are valid
-artifact names. Downloads require both `status=completed` and
-`verification_status=passed`. The API checks returned bytes against the persisted
-SHA-256 before responding. The storage adapter must enforce containment beneath
-the owning run directory, including symlinks, and never accept arbitrary paths.
+Допустимые имена артефактов: `nodes_roles.csv`, `clusters.csv`, `top_nodes.csv`,
+`aml_review_report.xlsx` и `audit.json`. XLSX — представление проверенных CSV для
+аналитика с фиксированной шириной колонок, фильтрами, закреплёнными заголовками и
+переносом evidence; он не заменяет контракт CSV. Скачивание требует одновременно
+`status=completed` и `verification_status=passed`. Перед ответом API сверяет
+возвращаемые байты с сохранённым SHA-256. Адаптер storage обязан гарантировать,
+что путь остаётся внутри директории соответствующего run, включая случаи с
+символическими ссылками, и никогда не принимать произвольные пути.
 
-Demo reset is disabled when `DEMO_MODE=false`. In demo mode it rejects active
-executions or connected event streams. The backend must atomically reject active
-demo claims and remove only demo-owned cases, events, and artifacts; live runs
-remain intact. This endpoint is intended for the local single-user MVP.
+Сброс demo отключён при `DEMO_MODE=false`. В demo-режиме он отклоняется при
+активных выполнениях или подключённых потоках событий. Backend должен атомарно
+отклонять активные demo-claims и удалять только принадлежащие demo cases, events
+и artifacts; live-runs остаются нетронутыми. Endpoint предназначен для локального
+однопользовательского MVP.
 
-Application errors use `{"error":{"code":"...","message":"..."}}`:
+Ошибки приложения имеют вид `{"error":{"code":"...","message":"..."}}`:
 
-| Status | Typical codes |
+| Статус | Типичные коды |
 |---|---|
 | 404 | `RUN_NOT_FOUND`, `NODE_NOT_FOUND`, `CASE_NOT_FOUND`, `ARTIFACT_NOT_FOUND` |
 | 409 | `INVALID_STATE`, `OPENAI_KEY_REQUIRED`, `RUN_BUSY`, `ARTIFACT_NOT_VERIFIED`, `ARTIFACT_INTEGRITY_FAILED` |
@@ -159,57 +173,64 @@ Application errors use `{"error":{"code":"...","message":"..."}}`:
 | 503 | `BACKEND_NOT_CONFIGURED`, `BACKEND_UNAVAILABLE`, `EXECUTION_CAPACITY`, `STREAM_CAPACITY` |
 | 500 | `INTERNAL_ERROR`, `BACKEND_CONTRACT_ERROR` |
 
-Validation errors expose field locations, never offending values. Unhandled
-exceptions are contained before reaching the ASGI server logger. Adapter-raised
-`AppError` messages must themselves be fixed, safe user-facing text. Capacity
-responses include `Retry-After: 1`. Unknown router paths retain FastAPI's default 404.
+Ошибки валидации раскрывают расположение поля, но не отклонённые значения.
+Необработанные исключения перехватываются до попадания в logger ASGI-сервера.
+Сообщения `AppError`, созданные адаптером, должны быть фиксированным безопасным
+текстом для пользователя. Ответы об исчерпании capacity содержат `Retry-After: 1`.
+Неизвестные пути router сохраняют стандартный ответ FastAPI 404.
 
-## Phase 1–3 integration
+## Интеграция с фазами 1–3
 
-`PhaseRunBackend` and `PhaseRunExecutor` implement the ports in
-`backend/app/api/ports.py` and are created by the default factory. HTTP routes
-do not import storage internals or calculate analytical metrics. Tests can still
-inject alternate port implementations:
+`PhaseRunBackend` и `PhaseRunExecutor` реализуют порты из
+`backend/app/api/ports.py` и создаются стандартной фабрикой. HTTP-routes не
+импортируют внутреннее устройство storage и не рассчитывают аналитические
+метрики. В тестах по-прежнему можно внедрять альтернативные реализации портов:
 
 ```python
-app = create_app(settings)  # real bundled workflow
+app = create_app(settings)  # настоящий workflow на встроенном датасете
 test_app = create_app(settings, backend=fixture_backend, executor=fixture_executor)
 ```
 
-`RunBackend` methods return validated HTTP DTOs. Map the domain/storage models in
-the adapter; do not make the domain depend on FastAPI. Read operations and claims
-are synchronous and thread-safe; the API executes blocking operations in its
-thread pool. `RunExecutor.execute_run` is async and must offload CPU/SQLite work.
-It receives only a run UUID and drives the registered tools from Phase 3.
+Методы `RunBackend` возвращают проверенные HTTP DTO. Domain- и storage-модели
+преобразуются в адаптере; domain не должен зависеть от FastAPI. Операции чтения
+и claims синхронны и thread-safe; API выполняет блокирующие операции в своём
+пуле потоков. `RunExecutor.execute_run` асинхронен и должен выносить работу
+CPU/SQLite из event loop. Он получает только UUID run и управляет
+зарегистрированными tools фазы 3.
 
-Integration invariants:
+Интеграционные инварианты:
 
-1. `claim_execution` is atomic across repeated requests. Completed runs are
-   immutable; failed runs cannot be silently resumed. Recover stale claims on
-   application startup without resetting analytical state or tool idempotency.
-2. `list_nodes`/`list_clusters` return verified results, including every orphan
-   seed. Return 404 for unknown runs and 409 before assessments are available.
-3. `list_events(after, limit)` returns only this run's committed safe DTOs in
-   strictly increasing sequence. Commit the final event and terminal status in
-   the same transaction. Do not return hidden reasoning or arbitrary payload keys.
-4. `execute_run` persists terminal state/decision before returning. Completion
-   requires independent verification. On exceptions the API calls `record_failure`
-   with `EXECUTION_FAILED`, `EXECUTION_TIMEOUT`, or `EXECUTION_INCOMPLETE`, without
-   exception text. `record_failure` must preserve already completed runs.
-5. Execution cancellation must cooperate with the orchestrator. Shutdown keeps
-   the last committed analytical state and calls `release_execution`; cancellation
-   must not leave an analytics thread continuing writes after the claim is released.
-6. `read_artifact` returns owned allowlisted bytes and their persisted checksum.
-   `reset_demo` enforces its own transaction/claim checks, not just API checks.
+1. `claim_execution` атомарен при повторных запросах. Завершённые runs неизменяемы,
+   а failed-runs нельзя незаметно возобновить. При запуске приложения устаревшие
+   claims восстанавливаются без сброса аналитического состояния или идемпотентности tools.
+2. `list_nodes`/`list_clusters` возвращают проверенные результаты, включая каждый
+   изолированный seed. Для неизвестных runs возвращается 404, а до готовности
+   оценок — 409.
+3. `list_events(after, limit)` возвращает только зафиксированные безопасные DTO
+   этого run в строго возрастающем порядке sequence. Последнее событие и конечный
+   status фиксируются одной транзакцией. Hidden reasoning и произвольные ключи
+   payload не возвращаются.
+4. `execute_run` сохраняет конечное состояние и решение до возврата. Для завершения
+   обязательна независимая verification. При исключении API вызывает
+   `record_failure` с `EXECUTION_FAILED`, `EXECUTION_TIMEOUT` или
+   `EXECUTION_INCOMPLETE`, не включая текст исключения. `record_failure` должен
+   сохранять уже завершённые runs.
+5. Отмена выполнения должна взаимодействовать с orchestrator. При shutdown
+   сохраняется последнее зафиксированное аналитическое состояние и вызывается
+   `release_execution`; после освобождения claim аналитический поток не должен
+   продолжать запись.
+6. `read_artifact` возвращает принадлежащие run байты из allowlist и их сохранённую
+   checksum. `reset_demo` применяет собственные транзакционные проверки и проверки
+   claims, а не полагается только на проверки API.
 
-Phase 2 persists tool results and verified export files instead of full assessment
-tables. `PhaseRunBackend` reads roles, scores, clusters, and ranking from those
-checksummed exports and recomputes graph features with the public deterministic
-analytics library against the original dataset fingerprint. It does not rely on
-in-memory runtime caches. Read endpoints return 409 until the run is completed
-and verified. The case stores ordered target GIDs, matched against the verified
-ranking in `top_nodes.csv`.
+Фаза 2 сохраняет результаты tools и проверенные файлы экспорта вместо полных
+таблиц оценок. `PhaseRunBackend` читает роли, scores, кластеры и ranking из этих
+экспортов с checksum и повторно рассчитывает признаки графа открытой
+детерминированной библиотекой аналитики по исходному fingerprint датасета. Он не
+полагается на runtime-cache в памяти. Endpoints чтения возвращают 409, пока run
+не завершён и не проверен. Case хранит упорядоченные GID целей, сопоставленные с
+проверенным ranking в `top_nodes.csv`.
 
-The real HTTP integration test checks 2,248 assessments, 91 clusters, 20 case
-targets, boundary uncertainty, string GIDs, independent verification, event
-replay, checksummed downloads, restart, missing live key, and reset isolation.
+Настоящий HTTP integration test проверяет 2 248 оценок, 91 кластер, 20 целей case,
+неопределённость границы, строковые GID, независимую verification, повтор событий,
+скачивание с checksum, перезапуск, отсутствие live-ключа и изоляцию сброса.

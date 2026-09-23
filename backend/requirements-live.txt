@@ -1,0 +1,10 @@
+# Locked additions for OpenAI live mode. Install together with requirements.lock
+# and requirements-api.txt; shared dependencies are pinned there.
+certifi==2026.7.22
+distro==1.9.0
+httpcore==1.0.9
+httpx==0.28.1
+jiter==0.17.0
+openai==2.54.0
+sniffio==1.3.1
+tqdm==4.70.1

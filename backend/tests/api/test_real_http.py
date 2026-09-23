@@ -98,6 +98,12 @@ def test_real_bundled_golden_path_over_http(settings):
         assert audit.status_code == 200
         assert audit.headers["etag"] == f'"{hashlib.sha256(audit.content).hexdigest()}"'
         assert audit.json()["run_id"] == run_id
+        workbook = client.get(base + "/artifacts/aml_review_report.xlsx")
+        assert workbook.status_code == 200
+        assert workbook.content.startswith(b"PK")
+        assert workbook.headers["content-type"].startswith(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
         assert client.post(base + "/execute").status_code == 200
 
     # Queries must survive a fresh process-local adapter and runtime cache.

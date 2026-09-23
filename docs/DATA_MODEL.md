@@ -6,7 +6,7 @@
 
 ## 2. Входные записи
 
-### NodeInput
+### Входная запись `NodeInput`
 
 | Поле | Тип | Ограничение |
 |---|---|---|
@@ -14,7 +14,7 @@
 | `depth` | int | От 0 до 4 |
 | `is_seed` | bool | Ровно 81 значение true в предоставленном датасете |
 
-### EdgeInput
+### Входная запись `EdgeInput`
 
 | Поле | Тип | Ограничение |
 |---|---|---|
@@ -26,7 +26,7 @@
 
 Пара `(src, dst)` уникальна, потому что рёбра агрегированы за весь период.
 
-### TransactionInput
+### Входная запись `TransactionInput`
 
 | Поле | Тип | Ограничение |
 |---|---|---|
@@ -39,7 +39,7 @@
 
 ## 3. Производные аналитические записи
 
-### NodeFeature
+### Запись признаков `NodeFeature`
 
 | Поле | Тип | Значение |
 |---|---|---|
@@ -60,7 +60,7 @@
 
 Временной сигнал является только вспомогательным evidence, потому что транзакции имеют даты, но не timestamps.
 
-### NodeAssessment
+### Оценка узла `NodeAssessment`
 
 | Поле | Тип | Ограничение |
 |---|---|---|
@@ -75,7 +75,7 @@
 
 Приоритет ролей для `v1`: `coordinator`, `consolidator`, `distributor`, `transit`, `terminal`, затем `peripheral`. Усечение на границе запрещает назначать terminal только из-за отсутствующего outflow.
 
-### ClusterAssessment
+### Оценка кластера `ClusterAssessment`
 
 | Поле | Тип | Ограничение |
 |---|---|---|
@@ -89,7 +89,7 @@
 | `algorithm` | string | `louvain` для MVP |
 | `random_seed` | int | Зафиксирован как 42 для воспроизводимости |
 
-### RankedTarget
+### Ранжированная цель `RankedTarget`
 
 | Поле | Тип | Ограничение |
 |---|---|---|
@@ -101,18 +101,18 @@
 
 ## 4. Операционные записи
 
-### AnalysisRun
+### Аналитический запуск `AnalysisRun`
 
 | Поле | Тип | Значение |
 |---|---|---|
-| `run_id` | UUID | Primary key |
+| `run_id` | UUID | Первичный ключ |
 | `dataset_id` | string | Логическая ссылка на датасет, не путь |
 | `dataset_sha256` | string | Fingerprint для воспроизводимости |
 | `mode` | enum | `demo` или `live` |
 | `status` | enum | Значение state machine |
 | `ruleset_version` | string | Версия аналитических правил |
 | `model` | string или null | Модель OpenAI в live mode |
-| `created_at` / `updated_at` | datetime | UTC timestamps |
+| `created_at` / `updated_at` | datetime | Метки времени UTC |
 | `warning_count` | int | Число сохранённых предупреждений |
 | `verification_status` | enum | `pending`, `passed` или `failed` |
 
@@ -127,59 +127,68 @@ created -> validated -> graph_ready -> analyzed -> clustered -> classified
 snapshots, результаты tools, events и содержимое артефактов неизменяемы.
 ```
 
-### AgentEvent
+### Событие агента `AgentEvent`
 
 | Поле | Тип | Значение |
 |---|---|---|
-| `event_id` | UUID | Primary key |
+| `event_id` | UUID | Первичный ключ |
 | `run_id` | UUID | Владеющий run |
 | `sequence` | int | Монотонно возрастает внутри run |
 | `kind` | enum | `started`, `tool_started`, `tool_completed`, `decision`, `action`, `warning`, `verification`, `failed`, `completed` |
 | `tool_name` | string или null | Только зарегистрированный tool |
 | `summary` | string | Безопасный UI trace без chain-of-thought |
 | `payload_json` | JSON | Очищенные структурированные metadata |
-| `created_at` | datetime | UTC timestamp |
+| `created_at` | datetime | Метка времени UTC |
 
-### ReviewCase
+### Проверочный кейс `ReviewCase`
 
 | Поле | Тип | Значение |
 |---|---|---|
-| `case_id` | UUID | Primary key |
+| `case_id` | UUID | Первичный ключ |
 | `run_id` | UUID | Исходный run, уникален для MVP |
 | `title` | string | Одна из фиксированных осторожных меток, утверждённых сервером |
 | `status` | enum | `ready_for_review`, `in_review`, `closed` |
 | `target_gids` | string array | Неизменяемый snapshot целей |
 | `created_by` | enum | `agent` или `analyst` |
-| `created_at` | datetime | UTC timestamp |
+| `created_at` | datetime | Метка времени UTC |
 
-### Artifact
+### Артефакт `Artifact`
 
 | Поле | Тип | Значение |
 |---|---|---|
-| `artifact_id` | UUID | Primary key |
+| `artifact_id` | UUID | Первичный ключ |
 | `run_id` | UUID | Владеющий run |
-| `name` | enum | `nodes_roles.csv`, `clusters.csv`, `top_nodes.csv`, `audit.json` |
+| `name` | enum | `nodes_roles.csv`, `clusters.csv`, `top_nodes.csv`, `aml_review_report.xlsx`, `audit.json` |
 | `relative_path` | string | Путь внутри директории артефактов run |
 | `sha256` | string | Fingerprint целостности |
 | `row_count` | int или null | Значение проверки CSV |
 
 ## 5. Контракты CSV
 
-### nodes_roles.csv
+### Файл `nodes_roles.csv`
 
 `gid,role,role_score,cluster_id,priority_score,evidence`
 
 Ровно 2 248 строк для предоставленного датасета. Дополнительные аналитические колонки можно добавлять, но обязательные колонки нельзя переименовывать или удалять.
 
-### clusters.csv
+### Файл `clusters.csv`
 
 `cluster_id,n_nodes,n_seed,sum_kzt_internal,top_gids,hypothesis`
 
-### top_nodes.csv
+### Файл `top_nodes.csv`
 
 `rank,gid,role,priority_score,why`
 
 Не менее 20 строк по убыванию priority.
+
+## 5.1 Человекочитаемый Excel-отчёт
+
+`aml_review_report.xlsx` дублирует проверенные результаты в формате для ручного
+анализа. Он не заменяет три обязательных CSV и не является источником
+authoritative metrics. В книге есть листы `Priority queue`, `Node assessments`,
+`Clusters` и `Run audit`; GID записываются как текст, заголовки закреплены,
+фильтры включены, длинные evidence и hypothesis переносятся, а ширина колонок
+задана при экспорте.
 
 ## 6. Основные инварианты
 

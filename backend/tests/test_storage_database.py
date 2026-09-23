@@ -55,6 +55,7 @@ def test_run_state_machine_verification_and_completion(database: Database) -> No
         ("nodes_roles.csv", 2_248),
         ("clusters.csv", 91),
         ("top_nodes.csv", 20),
+        ("aml_review_report.xlsx", None),
     ):
         database.register_artifact(
             run.run_id,

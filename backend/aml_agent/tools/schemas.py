@@ -274,8 +274,8 @@ _TOOL_DEFINITIONS: tuple[JsonObject, ...] = (
         "type": "function",
         "name": "export_results",
         "description": (
-            "Write the three required CSV files and an optional JSON audit bundle to the run's "
-            "controlled artifact directory."
+            "Write the three required CSV files, a formatted Excel review report, and an "
+            "optional JSON audit bundle to the run's controlled artifact directory."
         ),
         "strict": True,
         "parameters": {
@@ -289,7 +289,8 @@ _TOOL_DEFINITIONS: tuple[JsonObject, ...] = (
                 "include_audit": {
                     "type": "boolean",
                     "description": (
-                        "Whether to include audit.json alongside the mandatory CSV files."
+                        "Whether to include audit.json alongside the mandatory CSV files and "
+                        "Excel review report."
                     ),
                 },
             },

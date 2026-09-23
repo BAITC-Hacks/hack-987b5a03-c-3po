@@ -161,12 +161,25 @@ def case(case_id: UUID, service: Service):
 @router.get(
     "/api/runs/{run_id}/artifacts/{name}",
     response_class=Response,
-    responses={200: {"content": {"text/csv": {}, "application/json": {}}}},
+    responses={
+        200: {
+            "content": {
+                "text/csv": {},
+                "application/json": {},
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {},
+            }
+        }
+    },
     tags=["artifacts"],
 )
 def artifact(run_id: UUID, name: ArtifactName, service: Service):
     artifact = service.artifact(str(run_id), name)
-    media_type = "application/json" if name == "audit.json" else "text/csv"
+    if name == "audit.json":
+        media_type = "application/json"
+    elif name.endswith(".xlsx"):
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    else:
+        media_type = "text/csv"
     return Response(
         artifact.content,
         media_type=media_type,

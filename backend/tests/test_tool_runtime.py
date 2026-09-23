@@ -438,6 +438,7 @@ def test_exported_state_recovers_when_result_persistence_failed(
         "nodes_roles.csv",
         "clusters.csv",
         "top_nodes.csv",
+        "aml_review_report.xlsx",
     }
 
 
@@ -536,8 +537,15 @@ def test_synthetic_golden_path_exports_verifies_and_completes(
         "nodes_roles.csv",
         "clusters.csv",
         "top_nodes.csv",
+        "aml_review_report.xlsx",
         "audit.json",
     }
+    report_path = runtime_harness.artifacts.path_for(
+        runtime_harness.run_id,
+        "aml_review_report.xlsx",
+    )
+    assert report_path.read_bytes().startswith(b"PK")
+    assert exported["data"]["row_count_by_name"]["aml_review_report.xlsx"] is None
     assert verified["ok"] is True
     assert verified["data"]["passed"] is True
     run = runtime_harness.database.require_run(runtime_harness.run_id)

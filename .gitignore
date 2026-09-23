@@ -16,6 +16,7 @@ dist/
 build/
 coverage/
 artifacts/
+outputs/
 out/
 .pytest_cache/
 .ruff_cache/

@@ -114,6 +114,7 @@ def test_demo_and_responses_adapter_reach_same_verified_bundle(tmp_path: Path) -
             "nodes_roles.csv",
             "clusters.csv",
             "top_nodes.csv",
+            "aml_review_report.xlsx",
         }
         assert any(event.kind is EventKind.COMPLETED for event in events)
         assert all("test-key" not in event.summary for event in events)

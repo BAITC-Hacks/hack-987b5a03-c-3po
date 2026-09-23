@@ -1,4 +1,4 @@
-# Контракты tools AML Agent
+# Контракты инструментов AML Agent
 
 ## 1. Правила контрактов
 
@@ -12,7 +12,7 @@
 - Transport retry может повторно вернуть сохранённый результат только для точно таких же аргументов в непосредственном следующем состоянии tool. Повторы из более поздних состояний или `completed` отклоняются.
 - Title review case выбирается из фиксированного осторожного allowlist, утверждённого сервером; произвольная формулировка модели отклоняется.
 
-## 2. Стандартный result envelope
+## 2. Стандартная оболочка результата
 
 Каждый tool возвращает со стороны приложения JSON следующего вида:
 
@@ -42,7 +42,7 @@
 
 Allowlist ошибок: `INVALID_STATE`, `INVALID_ARGUMENT`, `DATASET_NOT_FOUND`, `DATASET_SCHEMA_INVALID`, `DATASET_INCONSISTENT`, `ANALYTICS_FAILED`, `CASE_WRITE_FAILED`, `EXPORT_FAILED`, `VERIFICATION_FAILED` и `INTERNAL_ERROR`.
 
-## 3. Function definitions для Responses API
+## 3. Определения функций для Responses API
 
 Ниже приведены канонические input definitions. Идентификаторы и строковые значения schema оставлены без перевода, чтобы контракт совпадал с реализацией:
 
@@ -252,7 +252,7 @@ Allowlist ошибок: `INVALID_STATE`, `INVALID_ARGUMENT`, `DATASET_NOT_FOUND`
   {
     "type": "function",
     "name": "export_results",
-    "description": "Write the three required CSV files and an optional JSON audit bundle to the run's controlled artifact directory.",
+    "description": "Write the three required CSV files, a formatted Excel review report, and an optional JSON audit bundle to the run's controlled artifact directory.",
     "strict": true,
     "parameters": {
       "type": "object",
@@ -264,7 +264,7 @@ Allowlist ошибок: `INVALID_STATE`, `INVALID_ARGUMENT`, `DATASET_NOT_FOUND`
         },
         "include_audit": {
           "type": "boolean",
-          "description": "Whether to include audit.json alongside the mandatory CSV files."
+          "description": "Whether to include audit.json alongside the mandatory CSV files and Excel review report."
         }
       },
       "required": ["run_id", "include_audit"],
@@ -292,7 +292,7 @@ Allowlist ошибок: `INVALID_STATE`, `INVALID_ARGUMENT`, `DATASET_NOT_FOUND`
 ]
 ```
 
-## 4. Данные результата каждого tool
+## 4. Данные результата каждого инструмента
 
 | Tool | Обязательные поля `data` |
 |---|---|
@@ -307,7 +307,7 @@ Allowlist ошибок: `INVALID_STATE`, `INVALID_ARGUMENT`, `DATASET_NOT_FOUND`
 | `export_results` | `artifact_names`, `sha256_by_name`, `row_count_by_name` |
 | `verify_run` | `passed`, `checks`, `failed_checks`, `completed_at` |
 
-## 5. Allowlist по состоянию
+## 5. Список разрешённых инструментов по состоянию
 
 | Состояние run | Tools, доступные модели |
 |---|---|
@@ -320,7 +320,7 @@ Allowlist ошибок: `INVALID_STATE`, `INVALID_ARGUMENT`, `DATASET_NOT_FOUND`
 | `ranked` | `get_node_evidence`, `create_review_case` |
 | `case_created` | `get_node_evidence`, `export_results` |
 | `exported` | `verify_run` |
-| `verified`, `completed` | `get_node_evidence` only |
+| `verified`, `completed` | только `get_node_evidence` |
 | `verification_failed`, `failed` | нет |
 
 Backend отклоняет любой вызов tool, не соответствующий сохранённому состоянию, даже если модель пытается его выполнить.

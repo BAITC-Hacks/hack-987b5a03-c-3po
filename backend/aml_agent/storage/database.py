@@ -18,6 +18,7 @@ from ._json import loads as json_loads
 from .models import (
     ALLOWED_ARTIFACT_NAMES,
     MANDATORY_ARTIFACT_NAMES,
+    READER_ARTIFACT_NAMES,
     AgentEvent,
     AnalysisRun,
     ArtifactRecord,
@@ -98,6 +99,9 @@ _VERIFICATION_SQL = _sql_values([item.value for item in VerificationStatus])
 _EVENT_KIND_SQL = _sql_values([item.value for item in EventKind])
 _CASE_STATUS_SQL = _sql_values([item.value for item in ReviewCaseStatus])
 _CASE_CREATOR_SQL = _sql_values([item.value for item in CaseCreator])
+_MIGRATION_1_ARTIFACT_NAME_SQL = _sql_values(
+    ["audit.json", "clusters.csv", "nodes_roles.csv", "top_nodes.csv"]
+)
 _ARTIFACT_NAME_SQL = _sql_values(sorted(ALLOWED_ARTIFACT_NAMES))
 
 
@@ -172,7 +176,7 @@ CREATE TABLE review_cases (
 CREATE TABLE artifacts (
     artifact_id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL REFERENCES analysis_runs(run_id) ON DELETE CASCADE,
-    name TEXT NOT NULL CHECK (name IN ({_ARTIFACT_NAME_SQL})),
+    name TEXT NOT NULL CHECK (name IN ({_MIGRATION_1_ARTIFACT_NAME_SQL})),
     relative_path TEXT NOT NULL,
     sha256 TEXT NOT NULL,
     row_count INTEGER CHECK (row_count IS NULL OR row_count >= 0),
@@ -186,7 +190,32 @@ CREATE TABLE artifacts (
 CREATE INDEX idx_artifacts_run_name ON artifacts(run_id, name);
 """
 
-_MIGRATIONS: tuple[tuple[int, str], ...] = ((1, _MIGRATION_1),)
+_MIGRATION_2 = f"""
+CREATE TABLE artifacts_new (
+    artifact_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES analysis_runs(run_id) ON DELETE CASCADE,
+    name TEXT NOT NULL CHECK (name IN ({_ARTIFACT_NAME_SQL})),
+    relative_path TEXT NOT NULL,
+    sha256 TEXT NOT NULL,
+    row_count INTEGER CHECK (row_count IS NULL OR row_count >= 0),
+    size_bytes INTEGER NOT NULL CHECK (size_bytes >= 0),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (run_id, name),
+    UNIQUE (run_id, relative_path)
+);
+
+INSERT INTO artifacts_new
+SELECT artifact_id, run_id, name, relative_path, sha256, row_count,
+       size_bytes, created_at, updated_at
+FROM artifacts;
+
+DROP TABLE artifacts;
+ALTER TABLE artifacts_new RENAME TO artifacts;
+CREATE INDEX idx_artifacts_run_name ON artifacts(run_id, name);
+"""
+
+_MIGRATIONS: tuple[tuple[int, str], ...] = ((1, _MIGRATION_1), (2, _MIGRATION_2))
 
 
 def utc_now() -> datetime:
@@ -1057,7 +1086,7 @@ class Database:
                     "SELECT name FROM artifacts WHERE run_id = ?", (normalized,)
                 )
             }
-            required = set(MANDATORY_ARTIFACT_NAMES)
+            required = set(MANDATORY_ARTIFACT_NAMES | READER_ARTIFACT_NAMES)
             if include_audit:
                 required.add("audit.json")
             missing = sorted(required - found)

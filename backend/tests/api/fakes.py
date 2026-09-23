@@ -253,6 +253,10 @@ class MemoryBackend:
             self.artifacts[run_id, "audit.json"] = ArtifactContent(
                 content, hashlib.sha256(content).hexdigest()
             )
+            content = b"PK\x03\x04fixture-workbook"
+            self.artifacts[run_id, "aml_review_report.xlsx"] = ArtifactContent(
+                content, hashlib.sha256(content).hexdigest()
+            )
             self.add_event(
                 run_id, "action", "Fixture case created.", {"case_id": str(case.case_id)}
             )

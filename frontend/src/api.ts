@@ -83,12 +83,16 @@ export async function getHealth(): Promise<{
   return request("/health");
 }
 
-export async function createDemoRun(): Promise<RunRecord> {
+export async function createRun(mode: RunRecord["mode"]): Promise<RunRecord> {
   return request("/api/runs", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ dataset_id: BUNDLED_DATASET_ID, mode: "demo" }),
+    body: JSON.stringify({ dataset_id: BUNDLED_DATASET_ID, mode }),
   });
+}
+
+export function createDemoRun(): Promise<RunRecord> {
+  return createRun("demo");
 }
 
 export async function executeRun(runId: string): Promise<void> {

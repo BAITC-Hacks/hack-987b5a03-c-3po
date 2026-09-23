@@ -50,6 +50,7 @@ def test_bundled_demo_reaches_verified_completion(tmp_path: Path) -> None:
             "nodes_roles.csv",
             "clusters.csv",
             "top_nodes.csv",
+            "aml_review_report.xlsx",
         }
 
 

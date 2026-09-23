@@ -21,6 +21,7 @@ from .database import (
 from .models import (
     ALLOWED_ARTIFACT_NAMES,
     MANDATORY_ARTIFACT_NAMES,
+    READER_ARTIFACT_NAMES,
     AgentEvent,
     AnalysisRun,
     ArtifactRecord,
@@ -42,6 +43,7 @@ __all__ = [
     "ALLOWED_CASE_TRANSITIONS",
     "ALLOWED_RUN_TRANSITIONS",
     "MANDATORY_ARTIFACT_NAMES",
+    "READER_ARTIFACT_NAMES",
     "AgentEvent",
     "AnalysisRun",
     "ArtifactRecord",

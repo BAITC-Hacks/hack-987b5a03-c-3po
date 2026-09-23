@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { getNode, validGid } from "./api";
+import { createRun, getNode, validGid } from "./api";
 
 describe("Phase 4 client boundary", () => {
   it("keeps large GIDs as canonical int64 decimal strings", () => {
@@ -71,6 +71,39 @@ describe("Phase 4 client boundary", () => {
       status: 404,
       code: "NODE_NOT_FOUND",
       message: "Node not found in this run.",
+    });
+  });
+
+  it("sends the explicitly selected provider mode when creating a run", async () => {
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        new Response(
+          JSON.stringify({
+            run_id: "b8c877b7-939d-4fda-bc8c-e85fcad0a3ee",
+            dataset_id: "bundled",
+            mode: "live",
+            status: "created",
+            executing: false,
+            verification_status: "pending",
+            verification: {},
+            counts: {},
+            warnings: [],
+            case_id: null,
+            created_at: "2026-09-23T00:00:00Z",
+            result: null,
+          }),
+          { status: 201, headers: { "content-type": "application/json" } },
+        ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createRun("live");
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const init = fetchMock.mock.calls[0][1];
+    expect(JSON.parse(String(init?.body))).toEqual({
+      dataset_id: "bundled",
+      mode: "live",
     });
   });
 });

@@ -1,19 +1,19 @@
-# Judge demo: от графа к проверяемому review case
+# Демо для жюри: от графа переводов к проверяемому AML case
 
-## Архитектура
+## Схема решения
 
 ```mermaid
 flowchart LR
     UI[React + Vite UI] <-->|HTTP + SSE| API[FastAPI]
-    API --> ORCH[Agent orchestrator<br/>state machine]
-    ORCH --> PROVIDER[Provider<br/>deterministic demo / OpenAI Responses]
-    PROVIDER -->|strict function calls| ORCH
-    ORCH --> TOOLS[Registered strict tools]
-    TOOLS --> ANALYTICS[Deterministic analytics<br/>graph, roles, clusters, ranking]
-    INPUT[(Bundled parquet)] --> ANALYTICS
+    API --> ORCH[Agent orchestrator<br/>машина состояний]
+    ORCH --> PROVIDER[Provider<br/>детерминированный demo / OpenAI Responses]
+    PROVIDER -->|строгие function calls| ORCH
+    ORCH --> TOOLS[Зарегистрированные tools]
+    TOOLS --> ANALYTICS[Детерминированная аналитика<br/>граф, роли, кластеры, ranking]
+    INPUT[(3 parquet-файла)] --> ANALYTICS
     TOOLS --> STORE[(SQLite<br/>runs, events, cases)]
-    TOOLS --> FILES[(Local artifacts<br/>CSV + audit.json)]
-    TOOLS --> VERIFY[verify_run<br/>independent recalculation]
+    TOOLS --> FILES[(Локальные артефакты<br/>CSV + XLSX + audit.json)]
+    TOOLS --> VERIFY[verify_run<br/>независимый пересчёт]
     INPUT --> VERIFY
     FILES --> VERIFY
     VERIFY --> STORE
@@ -21,44 +21,81 @@ flowchart LR
     QUERY --> INPUT
     QUERY --> FILES
     QUERY --> STORE
-    API -->|verified downloads| FILES
+    API -->|проверенные downloads| FILES
 ```
 
-The provider chooses allowed tools; it does not calculate scores, assign roles, or declare verification passed. `verify_run` reloads the registered parquet and independently recalculates authoritative results before the run can complete. GIDs remain decimal strings in JSON and in the browser. The business action is a local review case with a verified export bundle; the result is a hypothesis for analyst review.
+Provider выбирает только разрешённые tools. Он не рассчитывает scores, не назначает роли и не может самостоятельно объявить verification успешной. `verify_run` повторно читает исходные parquet и независимо пересчитывает authoritative результаты. В JSON и браузере GID остаются десятичными строками. Полезное действие агента — локальный review case с проверенным пакетом экспорта; результат является гипотезой для аналитика, а не обвинением.
 
-## Prepare before the 60–90 second walkthrough
+## Подготовка перед показом
 
-From the repository root, start the API in demo mode. No OpenAI key is needed. The following PowerShell setup follows [README.md](../README.md); on macOS/Linux use its corresponding venv commands.
+Рекомендуемый путь для жюри — одна команда из корня репозитория, без API-ключа:
 
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r backend\requirements.lock
-.\.venv\Scripts\python.exe -m pip install --no-deps --no-build-isolation -e backend
-.\.venv\Scripts\python.exe -m pip install -r backend\requirements-api.txt
-.\.venv\Scripts\python.exe -m uvicorn backend.app.main:create_app --factory --host 127.0.0.1 --port 8000 --workers 1
+```bash
+docker compose up --build
 ```
 
-In a second terminal:
+Дождитесь healthy-статуса обоих сервисов и откройте <http://127.0.0.1:5173>. В верхней панели должно появиться **API connected**, а режим **Demo** должен быть выбран по умолчанию.
 
-```powershell
-cd frontend
-npm ci
-npm run dev
+Если порты заняты, задайте их в локальном `.env`, например `BACKEND_PORT=18000` и `FRONTEND_PORT=15173`, после чего откройте frontend по новому порту. Для диагностики используйте:
+
+```bash
+docker compose ps
+docker compose logs backend
+docker compose logs frontend
 ```
 
-Open <http://127.0.0.1:5173> and confirm **API connected**. Keep both processes running. If this workspace has an old demo run in the browser session, use **Reset demo** after that run finishes.
+Перед презентацией выполните один пробный run. Затем нажмите **Reset demo**, чтобы открыть чистое начальное состояние. Не используйте `docker compose down --volumes`, если хотите сохранить локальную историю и артефакты.
 
-## 60–90 second walkthrough
+## Основной сценарий на 60–90 секунд
 
-| Time | Action and narration |
+| Время | Действие и текст |
 |---|---|
-| 0–12 s | Show the landing view: “We begin with 81 seed clients and a four-hop transfer network. Our output is an analyst review hypothesis, not an accusation.” Click **Start bundled demo**. |
-| 12–30 s | Point to **Run workflow** and the **Safe execution trace**. “The agent validates the bundled parquet, invokes controlled tools, computes deterministic evidence and ranks review targets. These are live backend steps, not a prerecorded UI sequence.” |
-| 30–48 s | Wait for **Verified run complete**. Open **Review targets** and select the first row. In **Client evidence**, show the role, priority score, numeric rule evidence, and uncertainty flags. “Role match is rule strength, not probability of crime.” |
-| 48–62 s | Close the drawer, scroll to **Network explorer**, choose a cluster and then a top GID. Show the directed graph and switch between **1 hop** and **2 hops**. “We limit the view to the relevant network slice.” |
-| 62–78 s | In **From signal to action**, show **BEFORE** and **AFTER**: the local review case captures ranked targets. Point to **VERIFIED**. “Independent verification recalculates results before the case and exports are treated as complete.” |
-| 78–90 s | Show **Evidence you can inspect**: `nodes_roles.csv`, `clusters.csv`, `top_nodes.csv`, and `audit.json`. Open or download an artifact. “The analyst gets a traceable queue and files for inspection.” |
+| 0–12 с | Покажите landing: «Мы начинаем с 81 известного seed-клиента и сети переводов на четыре колена. Результат — гипотеза для AML-проверки, а не обвинение». Нажмите **Start bundled demo**. |
+| 12–30 с | Покажите **Run workflow** и **Safe execution trace**: «Агент проверяет parquet, выбирает контролируемые tools, рассчитывает evidence и формирует очередь проверки. Это настоящие backend-шаги, а не записанная анимация». |
+| 30–48 с | Дождитесь **Verified run complete**. Откройте первую строку top-20 и покажите роль, priority score, конкретные значения evidence и uncertainty flags. |
+| 48–62 с | Перейдите в **Network explorer**, выберите кластер и покажите направленный ego graph на один и два перехода. |
+| 62–78 с | В блоке **From signal to action** покажите BEFORE/AFTER: агент создал локальный review case по top-20. Укажите badge **VERIFIED**. |
+| 78–90 с | Скачайте `nodes_roles.csv`, `clusters.csv`, `top_nodes.csv` или `aml_review_report.xlsx`: «Файлы доступны только после независимой проверки». |
 
-If calculation takes longer than the allotted presentation window, wait for `status=completed` and `verification_status=passed` before showing the verified sections; target, graph, and download views are intentionally unavailable earlier. The run remains reproducible through the [HTTP API](API.md), starting with `POST /api/runs` body `{"dataset_id":"bundled","mode":"demo"}` followed by `POST /api/runs/{run_id}/execute`.
+Если вычисление ещё идёт, не открывайте top-list и downloads до `status=completed` и `verification_status=passed`: backend специально закрывает непроверенные результаты.
 
-The bundled data omits identity, income, and ground truth. Depth-4 nodes with no visible outflow are boundary-limited, and seed inflow is incomplete. Do not present a role or priority score as guilt or a recommendation to block an account.
+## Расширенный разбор на пять минут
+
+После основного сценария найдите через поиск GID три узла с разными структурными ролями:
+
+| GID | Роль в ruleset v1 | Что показать |
+|---|---|---|
+| `100000003115284100` | `coordinator` | Пути от 11 seed, степени 8/2 и высокий bridge percentile; открыть 1-hop и 2-hop граф. |
+| `100000008489922100` | `distributor` | Наблюдаемый fan-out на 36 получателей; направление исходящих рёбер. |
+| `100000002398779100` | `consolidator` | 13 наблюдаемых плательщиков, низкая доля дальнейшего вывода и достижимость от 8 seed. |
+
+Значения относятся к встроенному датасету и ruleset `v1`; перед выступлением сверяйте их с текущим top-list. Для каждого узла проговорите:
+
+1. роль является силой совпадения с формальным правилом, а не вероятностью преступления;
+2. evidence построен из наблюдаемых чисел;
+3. неизвестные данные не достраиваются;
+4. решение аналитика остаётся ручным.
+
+Завершите показом `audit.json` и review case: так жюри видит полный путь `EVENT → TOOLS → ACTION → VERIFY`, а не только текст модели.
+
+## Live mode с OpenAI
+
+Golden path следует показывать в детерминированном demo mode: он не зависит от сети или внешнего API. Live mode является альтернативой и использует тот же набор tools.
+
+Для него внесите ключ только в локальный игнорируемый `.env`:
+
+```dotenv
+DEMO_MODE=false
+OPENAI_API_KEY=<ваш ключ>
+OPENAI_MODEL=gpt-5-mini
+```
+
+Пересоберите приложение командой `docker compose up --build`, затем выберите **OpenAI live**. Никогда не показывайте содержимое `.env`, терминал с ключом или полный environment на демонстрации.
+
+## Ограничения, которые нужно озвучить
+
+- В данных нет ФИО, ИИН, дохода и ground truth.
+- У узлов на `depth=4` дальнейшие переводы не наблюдаются из-за границы обхода.
+- Входящий поток seed-клиентов неполон.
+- Даты не содержат время внутри дня.
+- Система создаёт очередь для аналитика, но не блокирует счета и не отправляет данные регулятору.

@@ -303,7 +303,33 @@ p {
 .hero-actions {
   display: flex;
   align-items: center;
-  gap: 22px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.mode-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.mode-toggle button {
+  border: 0;
+  border-radius: 5px;
+  padding: 8px 10px;
+  color: #a9c0cf;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 760;
+}
+.mode-toggle button.selected {
+  color: #0d2632;
+  background: #dff8f1;
+}
+.mode-toggle button:disabled:not(.selected) {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 .primary-button {
   height: 43px;

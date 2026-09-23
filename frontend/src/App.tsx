@@ -9,7 +9,7 @@ import {
 import {
   ApiError,
   artifactUrl,
-  createDemoRun,
+  createRun,
   executeRun,
   getCase,
   getClusters,
@@ -77,6 +77,11 @@ const ARTIFACTS: { name: ArtifactName; label: string; description: string }[] =
       name: "top_nodes.csv",
       label: "Priority queue",
       description: "Ranked review targets",
+    },
+    {
+      name: "aml_review_report.xlsx",
+      label: "Excel review report",
+      description: "Formatted tables for manual review",
     },
     {
       name: "audit.json",
@@ -187,6 +192,8 @@ export default function App() {
   const [health, setHealth] = useState<"checking" | "online" | "offline">(
     "checking",
   );
+  const [liveConfigured, setLiveConfigured] = useState(false);
+  const [runMode, setRunMode] = useState<RunRecord["mode"]>("demo");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [traceInterrupted, setTraceInterrupted] = useState(false);
@@ -210,8 +217,10 @@ export default function App() {
     try {
       const result = await getHealth();
       setHealth(result.backend_ready ? "online" : "offline");
+      setLiveConfigured(result.live_configured);
     } catch {
       setHealth("offline");
+      setLiveConfigured(false);
     }
   }, []);
 
@@ -351,11 +360,11 @@ export default function App() {
     setQueryError(null);
   }, []);
 
-  async function startDemo() {
+  async function startRun() {
     setBusy(true);
     setError(null);
     try {
-      const created = await createDemoRun();
+      const created = await createRun(runMode);
       sessionStorage.setItem(SESSION_KEY, created.run_id);
       setRun(created);
       setRunId(created.run_id);
@@ -379,18 +388,20 @@ export default function App() {
     setBusy(true);
     setError(null);
     try {
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        try {
-          await resetDemo();
-          break;
-        } catch (caught) {
-          if (
-            !(caught instanceof ApiError) ||
-            caught.code !== "RUN_BUSY" ||
-            attempt === 2
-          )
-            throw caught;
-          await new Promise((resolve) => window.setTimeout(resolve, 350));
+      if (run?.mode !== "live") {
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          try {
+            await resetDemo();
+            break;
+          } catch (caught) {
+            if (
+              !(caught instanceof ApiError) ||
+              caught.code !== "RUN_BUSY" ||
+              attempt === 2
+            )
+              throw caught;
+            await new Promise((resolve) => window.setTimeout(resolve, 350));
+          }
         }
       }
       sessionStorage.removeItem(SESSION_KEY);
@@ -521,13 +532,47 @@ export default function App() {
                 evidence supports that choice.
               </p>
               <div className="hero-actions">
+                {!runId && (
+                  <div className="mode-toggle" aria-label="Agent provider mode">
+                    <button
+                      type="button"
+                      className={runMode === "demo" ? "selected" : ""}
+                      onClick={() => setRunMode("demo")}
+                      disabled={busy}
+                    >
+                      Demo
+                    </button>
+                    <button
+                      type="button"
+                      className={runMode === "live" ? "selected" : ""}
+                      onClick={() => setRunMode("live")}
+                      disabled={busy || !liveConfigured}
+                      title={
+                        liveConfigured
+                          ? "Use the configured OpenAI provider"
+                          : "Configure OPENAI_API_KEY to enable live mode"
+                      }
+                    >
+                      OpenAI live
+                    </button>
+                  </div>
+                )}
                 <button
                   className="primary-button"
-                  onClick={() => void startDemo()}
-                  disabled={busy || health !== "online" || Boolean(runId)}
+                  onClick={() => void startRun()}
+                  disabled={
+                    busy ||
+                    health !== "online" ||
+                    Boolean(runId) ||
+                    (runMode === "live" && !liveConfigured)
+                  }
                 >
                   {busy ? <Spinner /> : <Icon name="spark" size={18} />}
-                  {runId ? "Run started" : "Start bundled demo"}{" "}
+                  {runId
+                    ? "Run started"
+                    : runMode === "live"
+                      ? "Start OpenAI run"
+                      : "Start bundled demo"}{" "}
                   {!busy && !runId && <Icon name="arrow" size={17} />}
                 </button>
                 {runId && (
@@ -536,7 +581,7 @@ export default function App() {
                     onClick={() => void reset()}
                     disabled={busy || !ended || Boolean(run?.executing)}
                   >
-                    Reset demo
+                    {run?.mode === "live" ? "New run" : "Reset demo"}
                   </button>
                 )}
               </div>
@@ -544,7 +589,11 @@ export default function App() {
                 <span className="note-icon">
                   <Icon name="check" size={14} />
                 </span>
-                Real analytics, local case creation, independent verification
+                {runMode === "live"
+                  ? liveConfigured
+                    ? "OpenAI chooses tools; analytics and verification remain deterministic"
+                    : "Add OPENAI_API_KEY to the ignored .env file to enable live mode"
+                  : "Real analytics, local case creation, independent verification"}
               </div>
             </div>
             <div className="hero-art" aria-hidden="true">

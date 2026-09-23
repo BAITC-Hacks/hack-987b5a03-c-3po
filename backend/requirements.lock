@@ -30,3 +30,4 @@ typing-extensions==4.16.0
 typing-inspection==0.4.4
 tzdata==2026.4
 wheel==0.45.1
+XlsxWriter==3.2.9

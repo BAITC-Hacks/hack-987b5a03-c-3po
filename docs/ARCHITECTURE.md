@@ -89,7 +89,7 @@ docs/
 5. `frontend` получает GID строками и не выполняет authoritative расчёты scores.
 6. OpenAI output может выбирать tools и давать осторожные формулировки, но не может переписывать рассчитанные metrics, roles, scores или verification status.
 
-## 6. Runtime flow
+## 6. Поток выполнения
 
 1. `POST /api/runs` создаёт run для встроенного датасета. Загрузка пользовательских пакетов пока не поддерживается.
 2. `POST /api/runs/{run_id}/execute` запускает orchestrator.
@@ -99,7 +99,7 @@ docs/
 6. `verify_run` заново загружает зарегистрированные parquet, пересчитывает authoritative analytics и сравнивает файлы независимо от агента и in-memory cache.
 7. Только проверенный run может перейти в `completed` или открыть финальные downloads.
 
-## 7. API surface
+## 7. Контракт API
 
 HTTP-реализация и контракт её интеграции с фазами 1–3 описаны в [API.md](API.md).
 
@@ -109,7 +109,7 @@ HTTP-реализация и контракт её интеграции с фа�
 | `POST` | `/api/runs` | Создать run по известному датасету |
 | `POST` | `/api/runs/{run_id}/execute` | Запустить или безопасно продолжить выполнение |
 | `GET` | `/api/runs/{run_id}` | Status run, счётчики, warnings и итоговый результат |
-| `GET` | `/api/runs/{run_id}/events` | SSE execution trace |
+| `GET` | `/api/runs/{run_id}/events` | SSE-трассировка выполнения |
 | `GET` | `/api/runs/{run_id}/nodes` | Пагинируемый и фильтруемый priority list |
 | `GET` | `/api/runs/{run_id}/nodes/{gid}` | Evidence узла и ego graph |
 | `GET` | `/api/runs/{run_id}/clusters` | Сводки кластеров |

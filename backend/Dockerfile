@@ -9,10 +9,11 @@ ENV VIRTUAL_ENV=/opt/venv \
 
 RUN python -m venv "$VIRTUAL_ENV"
 
-COPY backend/requirements.lock backend/requirements-api.txt /tmp/
+COPY backend/requirements.lock backend/requirements-api.txt backend/requirements-live.txt /tmp/
 RUN python -m pip install \
     --requirement /tmp/requirements.lock \
-    --requirement /tmp/requirements-api.txt
+    --requirement /tmp/requirements-api.txt \
+    --requirement /tmp/requirements-live.txt
 
 COPY backend /src/backend
 RUN python -m pip install --no-deps --no-build-isolation /src/backend

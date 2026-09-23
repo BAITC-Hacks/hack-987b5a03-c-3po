@@ -22,7 +22,7 @@ docker compose down
 
 Именованные volumes сохраняют SQLite и артефакты между обычными перезапусками. Команду `docker compose down --volumes` используйте только когда нужно намеренно удалить локальное demo-состояние.
 
-## Запуск HTTP API и demo
+## Запуск HTTP API и демоверсии
 
 Из корня репозитория, с Python 3.12+ (macOS/Linux):
 
@@ -50,7 +50,7 @@ py -3.12 -m venv .venv
 Откройте [интерактивную документацию API](http://127.0.0.1:8000/docs) или [health](http://127.0.0.1:8000/health).
 `/health` показывает доступность backend. В `/docs` создайте run через `POST /api/runs` с `{"dataset_id":"bundled","mode":"demo"}`, затем передайте полученный `run_id` в `POST /api/runs/{run_id}/execute`. Дождитесь `status=completed` и `verification_status=passed` в `GET /api/runs/{run_id}`; только после этого доступны оценки узлов, case и проверенные файлы. API принимает только встроенный `dataset_id=bundled`, без загрузки произвольных parquet. В demo-режиме API-ключ не нужен. Используйте один Uvicorn worker: координация выполняющихся запусков находится в памяти процесса.
 
-### Запуск React UI
+### Запуск интерфейса React
 
 Оставьте API работающим и в другом терминале выполните:
 
@@ -76,7 +76,7 @@ AML-аналитик начинает с 81 известного seed-клиен
 
 AML Agent — инструмент поддержки решений. Роли и приоритеты являются гипотезами для проверки аналитиком, а не доказательствами вины и не указаниями блокировать счёт.
 
-## Целевой workflow
+## Целевой рабочий процесс
 
 ```text
 Пакет parquet
@@ -91,7 +91,7 @@ AML Agent — инструмент поддержки решений. Роли �
 
 В live-режиме модель OpenAI выбирает контролируемые tools и возвращает конечное решение по строгой схеме. Детерминированный backend рассчитывает роли и метрики, создаёт case и проверяет результаты.
 
-## Реализованный golden path через CLI
+## Реализованный основной сценарий через CLI
 
 Текущий offline workflow выполняет девять изменяющих состояние или проверочных шагов. Десятый контролируемый tool, `get_node_evidence`, вызывается по запросу:
 
@@ -101,7 +101,7 @@ inspect_dataset -> build_graph -> compute_graph_features -> cluster_network
 -> verify_run -> completed
 ```
 
-На встроенном датасете система создаёт 2 248 оценок узлов, 91 сводку по кластерам, top-20, один локальный review case, три обязательных CSV-файла, `audit.json` и отчёт из 19 проверок. Demo-режиму API-ключ не нужен.
+На встроенном датасете система создаёт 2 248 оценок узлов, 91 сводку по кластерам, top-20, один локальный review case, три обязательных CSV-файла, форматированный `aml_review_report.xlsx`, `audit.json` и независимый отчёт проверки. Demo-режиму API-ключ не нужен.
 
 ### Быстрый запуск в Windows
 
@@ -172,7 +172,7 @@ React UI получает результаты через FastAPI, которы�
 - [Модель данных](docs/DATA_MODEL.md)
 - [Аналитические правила](docs/ANALYTICS.md)
 - [Контракты tools](docs/TOOLS.md)
-- [Agent loop](docs/AGENT_LOOP.md)
+- [Цикл агента](docs/AGENT_LOOP.md)
 - [HTTP API](docs/API.md)
 - [План реализации](TODO.md)
 
@@ -187,11 +187,19 @@ Live orchestrator использует OpenAI Responses API с function calling 
 В Windows PowerShell используйте `.\.venv\Scripts\python.exe -m pip install -e 'backend[live]'`.
 
 ```dotenv
-OPENAI_API_KEY=your-existing-key
+DEMO_MODE=false
+OPENAI_API_KEY=<ваш существующий ключ>
 OPENAI_MODEL=gpt-5-mini
 ```
 
-Запускайте CLI из корня репозитория: `aml-agent-run --mode live --data data --database var/live.sqlite3 --artifacts artifacts`. В API создайте run с `{"dataset_id":"bundled","mode":"live"}`, затем вызовите `/execute`. На Windows используйте `.\.venv\Scripts\aml-agent-run.exe`; на macOS/Linux — `.venv/bin/aml-agent-run`. Ключ нельзя добавлять в исходный код, логи или коммиты.
+Ключ вводится только локально: не отправляйте его в чат и не добавляйте в `.env.example`. Корневой `.env` исключён из Git.
+
+После настройки можно использовать любой из двух способов:
+
+- Docker: `docker compose up --build`, затем выберите **OpenAI live** в интерфейсе. Образ уже содержит зафиксированную версию OpenAI SDK.
+- CLI: `aml-agent-run --mode live --data data --database var/live.sqlite3 --artifacts artifacts`. На Windows используйте `.\.venv\Scripts\aml-agent-run.exe`; на macOS/Linux — `.venv/bin/aml-agent-run`.
+
+Через HTTP API создайте run с `{"dataset_id":"bundled","mode":"live"}`, затем вызовите `/execute`. Ключ нельзя добавлять в исходный код, логи или коммиты.
 
 CLI по умолчанию запускается с `--mode demo`. Настройка API `DEMO_MODE=true` также выбирает demo для новых runs без явного `mode` и разрешает локальный demo reset; `DEMO_MODE=false` меняет режим по умолчанию на live и отключает reset. Demo заменяет только model provider — аналитика, tools, case, экспорт и проверка остаются настоящими.
 
@@ -217,7 +225,7 @@ python3.12 -m venv .venv
 
 Starter намеренно не реализует назначение ролей, кластеризацию, ранжирование и визуализацию.
 
-## Компонент orchestration фазы 3
+## Компонент оркестрации фазы 3
 
 `backend/aml_agent/agent/` содержит ограниченный цикл запуска, demo-provider, адаптер OpenAI Responses, строгую проверку вызовов tools и адаптеры к рабочим SQLite-аудиту и runtime tools. Demo-режим выполняет настоящую аналитику и создание case. Интеграционный тест сравнивает результаты demo- и live-provider на встроенных parquet-файлах; транспорт Responses в тесте имитируется.
 
@@ -234,7 +242,9 @@ python -m pytest backend/tests -q
 - `nodes_roles.csv`: одна строка для каждого из 2 248 узлов;
 - `clusters.csv`: статистика кластеров и осторожная гипотеза;
 - `top_nodes.csv`: минимум 20 ранжированных целей для проверки;
+- `aml_review_report.xlsx`: те же проверенные данные в удобной для аналитика книге с фильтрами, закреплёнными заголовками, переносом текста и настроенной шириной колонок;
 - `audit.json`: хеш датасета, версия ruleset, события tools, предупреждения и результат проверки;
+- браузерный UI с направлением графа, ролями, кластерами, поиском GID, execution trace и состоянием до/после;
 - локальный review case в SQLite со snapshot top-20.
 
 Артефакты каждого run сохраняются в `artifacts/<run_id>/` и исключены из Git. Для получения проверенных файлов на своей машине запустите `aml-agent-tools` или demo в React UI; скачивание доступно только после `verification_status=passed`. Проверенные counts, SHA-256 и команда воспроизведения описаны в [docs/VERIFIED_EXPORTS.md](docs/VERIFIED_EXPORTS.md).
@@ -252,7 +262,7 @@ python -m pytest backend/tests -q
 
 Проверенный масштаб встроенного датасета — 2 248 узлов, 3 119 рёбер и 4 840 транзакций. Pipeline использует pandas/NetworkX в памяти, SQLite и локальные файлы; HTTP API запускается с одним Uvicorn worker. API ограничивает размер страниц и ego graph, но чтение узлов после завершения run заново загружает проверенные CSV и исходный parquet и пересчитывает признаки. Это локальный однопользовательский MVP, без подтверждённой работы на графе в миллион узлов. Для большего масштаба потребуются другие реализации графового расчёта, хранения и bounded queries при сохранении контрактов API и tools.
 
-## Troubleshooting
+## Устранение неполадок
 
 | Симптом | Что проверить |
 |---|---|
@@ -302,6 +312,7 @@ python -m pytest backend/tests -q
 |   |-- pyproject.toml
 |   |-- requirements.lock
 |   |-- requirements-api.txt
+|   |-- requirements-live.txt
 |   `-- requirements-api-dev.txt
 |-- frontend/          # React/Vite/TypeScript UI и Cytoscape-граф
 |-- docker-compose.yml # backend/frontend и healthchecks

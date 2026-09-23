@@ -26,8 +26,20 @@ Gid = Annotated[StrictStr, Field(pattern=r"^(0|[1-9][0-9]{0,18})$"), AfterValida
 Score = Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
 Amount = Annotated[float, Field(ge=0, allow_inf_nan=False)]
 Role = Literal["coordinator", "consolidator", "distributor", "transit", "terminal", "peripheral"]
-ArtifactName = Literal["nodes_roles.csv", "clusters.csv", "top_nodes.csv", "audit.json"]
-ARTIFACT_NAMES = ("nodes_roles.csv", "clusters.csv", "top_nodes.csv", "audit.json")
+ArtifactName = Literal[
+    "nodes_roles.csv",
+    "clusters.csv",
+    "top_nodes.csv",
+    "aml_review_report.xlsx",
+    "audit.json",
+]
+ARTIFACT_NAMES = (
+    "nodes_roles.csv",
+    "clusters.csv",
+    "top_nodes.csv",
+    "aml_review_report.xlsx",
+    "audit.json",
+)
 ToolName = Literal[
     "inspect_dataset",
     "build_graph",
