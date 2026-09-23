@@ -18,6 +18,7 @@ import {
   getNode,
   getRun,
   getTopNodes,
+  importDataset,
   resetDemo,
   subscribeToEvents,
   validGid,
@@ -25,6 +26,7 @@ import {
 import type {
   ArtifactName,
   ClusterSummary,
+  DatasetImportResult,
   Gid,
   NodeDetail,
   NodeSummary,
@@ -219,6 +221,10 @@ export default function App() {
   );
   const [liveConfigured, setLiveConfigured] = useState(false);
   const [runMode, setRunMode] = useState<RunRecord["mode"]>("demo");
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [seedInput, setSeedInput] = useState("");
+  const [importedDataset, setImportedDataset] =
+    useState<DatasetImportResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [traceInterrupted, setTraceInterrupted] = useState(false);
@@ -416,7 +422,7 @@ export default function App() {
     setBusy(true);
     setError(null);
     try {
-      const created = await createRun(runMode);
+      const created = await createRun(runMode, importedDataset?.dataset_id);
       sessionStorage.setItem(SESSION_KEY, created.run_id);
       setRun(created);
       setRunId(created.run_id);
@@ -431,6 +437,30 @@ export default function App() {
     } catch (caught) {
       setError(describeError(caught));
       void checkHealth();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function uploadDataset() {
+    const seeds = seedInput
+      .split(/[\s,;]+/)
+      .map((value) => value.trim())
+      .filter(Boolean);
+    if (!uploadFiles.length) {
+      setError("Choose at least one CSV file.");
+      return;
+    }
+    if (!seeds.length || !seeds.every(validGid)) {
+      setError("Enter one or more full decimal seed GIDs.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      setImportedDataset(await importDataset(uploadFiles, seeds));
+    } catch (caught) {
+      setError(describeError(caught));
     } finally {
       setBusy(false);
     }
@@ -465,6 +495,9 @@ export default function App() {
       setReviewCase(null);
       setSelectedGid(null);
       setActiveCluster(null);
+      setImportedDataset(null);
+      setUploadFiles([]);
+      setSeedInput("");
     } catch (caught) {
       setError(describeError(caught));
     } finally {
@@ -586,6 +619,48 @@ export default function App() {
                   "Starting with 81 seed clients, trace July transfers across four hops. See which accounts merit review first, why, and what evidence supports that choice.",
                 )}
               </p>
+              {!runId && (
+                <div className="dataset-import">
+                  <div>
+                    <strong>{label("Analyze your CSV files")}</strong>
+                    <span>{label("Required columns: src, dst, date, sum_kzt")}</span>
+                  </div>
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    multiple
+                    disabled={busy}
+                    onChange={(event) => {
+                      setUploadFiles(Array.from(event.target.files ?? []));
+                      setImportedDataset(null);
+                    }}
+                  />
+                  <input
+                    value={seedInput}
+                    disabled={busy}
+                    placeholder={label("Seed GIDs, separated by commas")}
+                    aria-label={label("Seed GIDs")}
+                    onChange={(event) => {
+                      setSeedInput(event.target.value);
+                      setImportedDataset(null);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void uploadDataset()}
+                    disabled={busy || !uploadFiles.length || !seedInput.trim()}
+                  >
+                    {label("Prepare dataset")}
+                  </button>
+                  {importedDataset && (
+                    <small>
+                      {importedDataset.n_files} {label("files")} ·{" "}
+                      {importedDataset.n_transactions} {label("transactions")} ·{" "}
+                      {importedDataset.n_nodes} {label("clients")}
+                    </small>
+                  )}
+                </div>
+              )}
               <div className="hero-actions">
                 {!runId && (
                   <div
@@ -630,7 +705,11 @@ export default function App() {
                     ? label("Run started")
                     : runMode === "live"
                       ? label("Start OpenAI run")
-                      : label("Start bundled demo")}{" "}
+                      : label(
+                          importedDataset
+                            ? "Analyze imported dataset"
+                            : "Start bundled demo",
+                        )}{" "}
                   {!busy && !runId && <Icon name="arrow" size={17} />}
                 </button>
                 {runId && (

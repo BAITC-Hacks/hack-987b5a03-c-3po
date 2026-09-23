@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from pathlib import Path
 from threading import Lock
 
@@ -67,11 +68,13 @@ class PhaseRunExecutor:
         database_path: Path,
         artifacts_dir: Path,
         data_dir: Path,
+        uploads_dir: Path | None = None,
     ) -> None:
         self.settings = settings
         self.database_path = Path(database_path)
         self.artifacts_dir = Path(artifacts_dir)
         self.data_dir = Path(data_dir)
+        self.uploads_dir = Path(uploads_dir or (Path(artifacts_dir) / "_datasets")).resolve()
 
     async def execute_run(self, run_id: str) -> None:
         control = _WorkerControl()
@@ -110,10 +113,15 @@ class PhaseRunExecutor:
                     timeout_seconds=self.settings.openai_timeout_seconds,
                     model=run.model or self.settings.openai_model,
                 )
+                registry = {"bundled": self.data_dir}
+                if re.fullmatch(r"upload-[0-9a-f]{32}", run.dataset_id):
+                    uploaded = (self.uploads_dir / run.dataset_id).resolve(strict=False)
+                    if uploaded.parent == self.uploads_dir and uploaded.is_dir():
+                        registry[run.dataset_id] = uploaded
                 runtime = ToolRuntime(
                     database,
                     ArtifactStore(self.artifacts_dir),
-                    {"bundled": self.data_dir},
+                    registry,
                     expected_seed_counts={"bundled": 81},
                     expected_periods={"bundled": ("2026-07-01", "2026-07-31")},
                 )

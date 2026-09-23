@@ -77,9 +77,40 @@ class RunState(StrEnum):
 TERMINAL_STATES = {RunState.COMPLETED, RunState.FAILED, RunState.VERIFICATION_FAILED}
 
 
+DatasetId = Annotated[StrictStr, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")]
+
+
 class CreateRun(Contract):
-    dataset_id: Literal["bundled"] = "bundled"
+    dataset_id: DatasetId = "bundled"
     mode: Literal["demo", "live"] | None = None
+
+
+class DatasetImportView(Contract):
+    dataset_id: DatasetId
+    n_files: int = Field(ge=1)
+    n_transactions: int = Field(ge=1)
+    n_nodes: int = Field(ge=1)
+    n_edges: int = Field(ge=1)
+    n_seed: int = Field(ge=1)
+    period_start: str
+    period_end: str
+    warnings: list[str] = Field(default_factory=list)
+
+
+class CsvUpload(Contract):
+    name: str = Field(min_length=1, max_length=200)
+    content: str = Field(min_length=1, max_length=25 * 1024 * 1024)
+
+
+class DatasetImportRequest(Contract):
+    files: list[CsvUpload] = Field(min_length=1, max_length=12)
+    seed_gids: list[Gid] = Field(min_length=1, max_length=1000)
+
+    @model_validator(mode="after")
+    def total_upload_limit(self):
+        if sum(len(file.content.encode("utf-8")) for file in self.files) > 25 * 1024 * 1024:
+            raise ValueError("CSV upload exceeds the 25 MB limit")
+        return self
 
 
 class AgentDecision(Contract):

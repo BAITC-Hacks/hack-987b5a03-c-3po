@@ -26,10 +26,18 @@ def create_app(
     settings = settings or Settings()
     if integrate and backend is None and executor is None:
         backend = PhaseRunBackend(
-            settings, settings.database_path, settings.artifacts_dir, settings.data_dir
+            settings,
+            settings.database_path,
+            settings.artifacts_dir,
+            settings.data_dir,
+            settings.uploads_dir,
         )
         executor = PhaseRunExecutor(
-            settings, settings.database_path, settings.artifacts_dir, settings.data_dir
+            settings,
+            settings.database_path,
+            settings.artifacts_dir,
+            settings.data_dir,
+            settings.uploads_dir,
         )
 
     @asynccontextmanager
@@ -44,7 +52,7 @@ def create_app(
         title="AML Agent API",
         version="0.1.0",
         lifespan=lifespan,
-        description="Run the verified AML analysis over the bundled dataset.",
+        description="Run verified AML analysis over the bundled or imported dataset.",
     )
 
     @app.exception_handler(AppError)

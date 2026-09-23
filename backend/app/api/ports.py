@@ -11,6 +11,7 @@ from .schemas import (
     ArtifactName,
     CaseView,
     ClusterView,
+    DatasetImportView,
     EdgeView,
     EventView,
     NodeView,
@@ -30,6 +31,10 @@ class RunBackend(Protocol):
         ...
 
     def create_run(self, *, dataset_id: str, mode: str, model: str | None) -> RunView: ...
+
+    def import_dataset(
+        self, *, files: list[tuple[str, bytes]], seed_gids: list[str]
+    ) -> DatasetImportView: ...
 
     def get_run(self, run_id: str) -> RunView: ...
 

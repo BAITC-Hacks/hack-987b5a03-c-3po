@@ -61,6 +61,9 @@ class ApiService:
             model=self.settings.openai_model if mode == "live" else None,
         )
 
+    def import_dataset(self, *, files: list[tuple[str, bytes]], seed_gids: list[str]):
+        return self.require_backend().import_dataset(files=files, seed_gids=seed_gids)
+
     async def start(self, run_id: str) -> ExecuteView:
         backend = self.require_backend()
         async with self.lock:

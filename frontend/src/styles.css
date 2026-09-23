@@ -310,6 +310,58 @@ p {
   gap: 12px;
   flex-wrap: wrap;
 }
+.dataset-import {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(190px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  max-width: 650px;
+  margin: 0 0 16px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(5, 28, 39, 0.52);
+}
+.dataset-import > div {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.dataset-import span,
+.dataset-import small {
+  color: #a9c0cf;
+  font-size: 11px;
+}
+.dataset-import input,
+.dataset-import button {
+  min-width: 0;
+  min-height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 7px;
+  color: #e8f5f7;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 7px 9px;
+}
+.dataset-import button {
+  cursor: pointer;
+  color: #0d2632;
+  background: #dff8f1;
+  font-weight: 760;
+}
+.dataset-import button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.dataset-import small {
+  grid-column: 1 / -1;
+  color: #88e2ca;
+}
+@media (max-width: 760px) {
+  .dataset-import {
+    grid-template-columns: 1fr;
+  }
+}
 .mode-toggle {
   display: inline-flex;
   gap: 2px;
