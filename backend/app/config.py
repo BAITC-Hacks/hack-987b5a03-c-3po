@@ -25,7 +25,6 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
     data_dir: Path = ROOT / "data"
     artifacts_dir: Path = ROOT / "artifacts"
-    uploads_dir: Path = ROOT / "var" / "datasets"
     database_url: str = "sqlite:///./aml_agent.db"
     sse_poll_seconds: float = Field(default=0.25, gt=0, le=5)
     sse_heartbeat_seconds: float = Field(default=15, gt=0, le=60)
@@ -33,7 +32,7 @@ class Settings(BaseSettings):
     api_max_active_runs: int = Field(default=2, ge=1, le=8)
     api_execution_timeout_seconds: float = Field(default=300, gt=0, le=900)
 
-    @field_validator("data_dir", "artifacts_dir", "uploads_dir")
+    @field_validator("data_dir", "artifacts_dir")
     @classmethod
     def resolve_directory(cls, value: Path) -> Path:
         return (ROOT / value).resolve()

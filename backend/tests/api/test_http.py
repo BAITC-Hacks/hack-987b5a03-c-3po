@@ -232,7 +232,7 @@ def test_live_mode_reset_is_disabled(settings, backend, executor):
 
 def test_openapi_and_cors(client):
     schema = client.get("/openapi.json").json()
-    assert len(schema["paths"]) == 12
+    assert len(schema["paths"]) == 11
     node_gid = schema["components"]["schemas"]["NodeView"]["properties"]["gid"]
     assert node_gid["type"] == "string"
     assert "additionalProperties" in schema["components"]["schemas"]["CreateRun"]

@@ -47,18 +47,6 @@ export interface RunRecord {
   } | null;
 }
 
-export interface DatasetImportResult {
-  dataset_id: string;
-  n_files: number;
-  n_transactions: number;
-  n_nodes: number;
-  n_edges: number;
-  n_seed: number;
-  period_start: string;
-  period_end: string;
-  warnings: string[];
-}
-
 export type EventKind =
   | "started"
   | "tool_started"

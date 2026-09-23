@@ -12,8 +12,6 @@ from .schemas import (
     CaseView,
     ClusterView,
     CreateRun,
-    DatasetImportRequest,
-    DatasetImportView,
     ExecuteView,
     Gid,
     HealthView,
@@ -51,17 +49,6 @@ def create_run(body: CreateRun, service: Service, response: Response):
     run = service.create_run(body)
     response.headers["Location"] = f"/api/runs/{run.run_id}"
     return run
-
-
-@router.post(
-    "/api/datasets/import",
-    response_model=DatasetImportView,
-    status_code=201,
-    tags=["datasets"],
-)
-def import_dataset(body: DatasetImportRequest, service: Service):
-    payloads = [(file.name, file.content.encode("utf-8")) for file in body.files]
-    return service.import_dataset(files=payloads, seed_gids=body.seed_gids)
 
 
 @router.get("/api/runs/{run_id}", response_model=RunView, tags=["runs"])

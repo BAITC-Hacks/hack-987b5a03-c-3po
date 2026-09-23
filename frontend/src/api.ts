@@ -1,7 +1,6 @@
 import type {
   ArtifactName,
   ClusterSummary,
-  DatasetImportResult,
   Gid,
   NodeDetail,
   NodeSummary,
@@ -84,28 +83,11 @@ export async function getHealth(): Promise<{
   return request("/health");
 }
 
-export async function createRun(
-  mode: RunRecord["mode"],
-  datasetId = BUNDLED_DATASET_ID,
-): Promise<RunRecord> {
+export async function createRun(mode: RunRecord["mode"]): Promise<RunRecord> {
   return request("/api/runs", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ dataset_id: datasetId, mode }),
-  });
-}
-
-export async function importDataset(
-  files: File[],
-  seedGids: Gid[],
-): Promise<DatasetImportResult> {
-  const uploaded = await Promise.all(
-    files.map(async (file) => ({ name: file.name, content: await file.text() })),
-  );
-  return request("/api/datasets/import", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ files: uploaded, seed_gids: seedGids }),
+    body: JSON.stringify({ dataset_id: BUNDLED_DATASET_ID, mode }),
   });
 }
 

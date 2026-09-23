@@ -20,7 +20,6 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
       DATA_DIR: /app/data
       ARTIFACTS_DIR: /app/artifacts
-      UPLOADS_DIR: /app/var/datasets
       DATABASE_URL: sqlite:////app/var/aml-agent.sqlite3
     command:
       - python

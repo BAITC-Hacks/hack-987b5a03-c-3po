@@ -16,18 +16,16 @@ import re
 import shutil
 import threading
 from pathlib import Path
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from aml_agent.agent.integration import DatabaseRunRepository
 from aml_agent.agent.providers import deterministic_decision
 from aml_agent.analytics import build_directed_graph, compute_node_features, load_dataset
 from aml_agent.analytics.exports import CLUSTERS_COLUMNS, NODES_ROLES_COLUMNS, TOP_NODES_COLUMNS
-from aml_agent.analytics.validation import DatasetValidationError
 from aml_agent.storage import ArtifactStore, Database, RecordNotFoundError, RunState
 from aml_agent.tool_runtime import ToolRuntime
 
 from ..config import Settings
-from .dataset_import import import_csv_dataset
 from .errors import AppError
 from .ports import ArtifactContent
 from .schemas import (
@@ -35,7 +33,6 @@ from .schemas import (
     AgentDecision,
     CaseView,
     ClusterView,
-    DatasetImportView,
     EdgeView,
     EventView,
     NodeView,
@@ -63,15 +60,17 @@ class PhaseRunBackend:
         database_path: Path,
         artifacts_dir: Path,
         data_dir: Path,
-        uploads_dir: Path | None = None,
     ) -> None:
         self.settings = settings
         self.database = Database(database_path)
         self.artifact_store = ArtifactStore(artifacts_dir)
         self.data_dir = Path(data_dir).resolve()
-        self.uploads_dir = Path(uploads_dir or (Path(artifacts_dir) / "_datasets")).resolve()
-        self.uploads_dir.mkdir(parents=True, exist_ok=True)
-        self.runtime = self._make_runtime()
+        self.runtime = ToolRuntime(
+            self.database,
+            self.artifact_store,
+            {"bundled": self.data_dir},
+            expected_seed_counts={"bundled": 81},
+        )
         self.repository = DatabaseRunRepository(self.database)
         self._lock = threading.RLock()
         self._claimed: set[str] = set()
@@ -92,27 +91,9 @@ class PhaseRunBackend:
             raise AppError("RUN_NOT_FOUND", "Run not found.", 404) from None
 
     def create_run(self, *, dataset_id: str, mode: str, model: str | None) -> RunView:
-        if self._dataset_path(dataset_id) is None:
+        if dataset_id != "bundled":
             raise AppError("INVALID_DATASET", "Dataset is not registered.", 422)
-        self.runtime = self._make_runtime()
         return self.get_run(self.runtime.create_run(dataset_id, mode, model=model).run_id)
-
-    def import_dataset(
-        self, *, files: list[tuple[str, bytes]], seed_gids: list[str]
-    ) -> DatasetImportView:
-        dataset_id = f"upload-{uuid4().hex}"
-        target = self.uploads_dir / dataset_id
-        try:
-            values = import_csv_dataset(files, seed_gids, target)
-        except DatasetValidationError as exc:
-            raise AppError("INVALID_DATASET", str(exc), 422) from None
-        except Exception:
-            raise AppError(
-                "DATASET_IMPORT_FAILED", "The CSV dataset could not be imported.", 500
-            ) from None
-        with self._lock:
-            self.runtime = self._make_runtime()
-        return DatasetImportView(dataset_id=dataset_id, **values)
 
     def get_run(self, run_id: str) -> RunView:
         run = self._require_run(run_id)
@@ -247,46 +228,15 @@ class PhaseRunBackend:
 
     def _dataset(self, run_id: str):
         run = self._ready(run_id)
-        path = self._dataset_path(run.dataset_id)
-        if path is None:
-            raise AppError("DATASET_UNAVAILABLE", "Run dataset is unavailable.", 503)
         try:
-            dataset = load_dataset(
-                path, expected_seed_count=81 if run.dataset_id == "bundled" else None
-            )
+            dataset = load_dataset(self.data_dir, expected_seed_count=81)
         except Exception:
-            raise AppError("DATASET_UNAVAILABLE", "Run dataset could not be read.", 503) from None
+            raise AppError(
+                "DATASET_UNAVAILABLE", "Bundled dataset could not be read.", 503
+            ) from None
         if dataset.sha256 != run.dataset_sha256:
-            raise AppError("DATASET_CHANGED", "Run dataset changed after the run.", 409)
+            raise AppError("DATASET_CHANGED", "Bundled dataset changed after the run.", 409)
         return dataset
-
-    def _dataset_path(self, dataset_id: str) -> Path | None:
-        if dataset_id == "bundled":
-            return self.data_dir
-        if not re.fullmatch(r"upload-[0-9a-f]{32}", dataset_id):
-            return None
-        path = (self.uploads_dir / dataset_id).resolve(strict=False)
-        if path.parent != self.uploads_dir or not path.is_dir():
-            return None
-        required = ("nodes", "edges", "transactions")
-        if not all((path / f"{name}.parquet").is_file() for name in required):
-            return None
-        return path
-
-    def _make_runtime(self) -> ToolRuntime:
-        registry = {"bundled": self.data_dir}
-        if self.uploads_dir.is_dir():
-            for path in self.uploads_dir.iterdir():
-                dataset = self._dataset_path(path.name)
-                if dataset is not None:
-                    registry[path.name] = dataset
-        return ToolRuntime(
-            self.database,
-            self.artifact_store,
-            registry,
-            expected_seed_counts={"bundled": 81},
-            expected_periods={"bundled": ("2026-07-01", "2026-07-31")},
-        )
 
     def list_nodes(self, run_id: str) -> list[NodeView]:
         dataset = self._dataset(run_id)
@@ -416,14 +366,9 @@ class PhaseRunBackend:
         with self._lock:
             with self.database.transaction() as connection:
                 rows = connection.execute(
-                    "SELECT run_id, dataset_id FROM analysis_runs WHERE mode = 'demo'"
+                    "SELECT run_id FROM analysis_runs WHERE mode = 'demo'"
                 ).fetchall()
                 run_ids = [row["run_id"] for row in rows]
-                uploaded_ids = {
-                    row["dataset_id"]
-                    for row in rows
-                    if re.fullmatch(r"upload-[0-9a-f]{32}", row["dataset_id"])
-                }
                 if any(run_id in self._claimed for run_id in run_ids):
                     raise AppError("RUN_BUSY", "A demo run is executing.", 409)
                 root = self.artifact_store.root
@@ -436,23 +381,10 @@ class PhaseRunBackend:
                 connection.executemany(
                     "DELETE FROM analysis_runs WHERE run_id = ?", ((run_id,) for run_id in run_ids)
                 )
-                removable_datasets = [
-                    dataset_id
-                    for dataset_id in uploaded_ids
-                    if connection.execute(
-                        "SELECT 1 FROM analysis_runs WHERE dataset_id = ? LIMIT 1", (dataset_id,)
-                    ).fetchone()
-                    is None
-                ]
             for run_id in run_ids:
                 path = root / run_id
                 if path.exists():
                     shutil.rmtree(path)
-            for dataset_id in removable_datasets:
-                dataset_path = self._dataset_path(dataset_id)
-                if dataset_path is not None:
-                    shutil.rmtree(dataset_path)
-            self.runtime = self._make_runtime()
             return len(run_ids)
 
 

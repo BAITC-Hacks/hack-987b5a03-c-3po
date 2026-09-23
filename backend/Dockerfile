@@ -28,7 +28,6 @@ ENV VIRTUAL_ENV=/opt/venv \
     APP_ENV=production \
     DATA_DIR=/app/data \
     ARTIFACTS_DIR=/app/artifacts \
-    UPLOADS_DIR=/app/var/datasets \
     DATABASE_URL=sqlite:////app/var/aml-agent.sqlite3 \
     BACKEND_HOST=0.0.0.0 \
     BACKEND_PORT=8000

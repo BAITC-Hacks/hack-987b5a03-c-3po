@@ -63,7 +63,6 @@ python -m uvicorn backend.app.main:create_app --factory --host 127.0.0.1 --port 
 |---|---|---|
 | GET | `/health` | 200: liveness, режим и готовность; 503 при ошибке подключённой проверки backend |
 | POST | `/api/runs` | 201: `RunView` и `Location`; body `{ "dataset_id": "bundled", "mode": "demo" }` |
-| POST | `/api/datasets/import` | 201: импорт одного или нескольких CSV транзакций и создание логического `dataset_id` |
 | POST | `/api/runs/{run_id}/execute` | 202: выполнение принято или уже активно; 200 для неизменяемого завершённого run |
 | GET | `/api/runs/{run_id}` | Состояние, флаг выполнения, счётчики, предупреждения, ID case, verification и конечное решение |
 | GET | `/api/runs/{run_id}/events` | Сохранённые SSE-события с повторным воспроизведением, ожиданием и переподключением |
@@ -74,11 +73,8 @@ python -m uvicorn backend.app.main:create_app --factory --host 127.0.0.1 --port 
 | GET | `/api/runs/{run_id}/artifacts/{name}` | Проверенные байты с именем вложения и SHA-256 ETag |
 | POST | `/api/demo/reset` | Число удалённых demo-runs; live-состояние должно сохраниться |
 
-По умолчанию `dataset_id` равен `bundled`. Импорт принимает JSON-поля `files`
-(`name` и UTF-8 `content`) и `seed_gids`; каждый CSV обязан содержать точные колонки
-`src,dst,date,sum_kzt`. Сервер объединяет файлы, строит четырёхуровневый граф от
-выбранных seed и сохраняет канонические parquet в контролируемой директории.
-Имена файлов не используются как пути. Значение `mode` по умолчанию берётся из настроек. Дополнительные
+По умолчанию `dataset_id` равен `bundled`; произвольные загрузки и пути не
+поддерживаются. Значение `mode` по умолчанию берётся из настроек. Дополнительные
 поля body отклоняются. ID run и case должны быть UUID. Во всех позициях JSON,
 включая endpoints графа, лидеров кластеров и цели case, GID передаются как
 канонические неотрицательные десятичные **строки** int64. Числовые GID в JSON,

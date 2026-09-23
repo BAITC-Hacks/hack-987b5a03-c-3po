@@ -2,7 +2,7 @@
 
 AML Agent превращает обезличенный граф банковских переводов в объяснимую очередь проверок для AML-аналитика. Система проверяет входные данные, рассчитывает детерминированные графовые признаки, назначает роли, ранжирует цели, создаёт локальный review case и независимо проверяет полученные артефакты.
 
-> Текущий статус: полный workflow работает через CLI, FastAPI и React UI. Docker Compose запускает demo без API-ключа и live mode с локально настроенным ключом OpenAI; оба режима используют настоящие tools, storage, review case, экспорт и verification.
+> Текущий статус: работают детерминированная аналитика, CLI agent, FastAPI и React UI на встроенном датасете (фазы 0–5). Docker Compose собирает и запускает полный demo workflow без API-ключа; состояние остальных задач фазы 6 отражено в [TODO.md](TODO.md).
 
 ## Запуск через Docker Compose
 
@@ -13,16 +13,6 @@ docker compose up --build
 ```
 
 После успешных healthchecks откройте <http://127.0.0.1:5173>. Backend health доступен по <http://127.0.0.1:8000/health> и через frontend proxy по <http://127.0.0.1:5173/health>. По умолчанию используется `DEMO_MODE=true`; аналитика, tools, SQLite, review case, экспорт и verification выполняются по-настоящему.
-
-Для live mode скопируйте `.env.example` в локальный `.env`, вставьте существующий ключ только в `OPENAI_API_KEY`, оставьте `DEMO_MODE=true` безопасным режимом по умолчанию и снова выполните `docker compose up --build`. Затем откройте UI и выберите **OpenAI live**. Значение `DEMO_MODE=false` требуется только если live должен стать режимом по умолчанию для новых запусков.
-
-```dotenv
-DEMO_MODE=true
-OPENAI_API_KEY=<ваш существующий ключ>
-OPENAI_MODEL=gpt-5-mini
-```
-
-`.env` исключён из Git. Не вставляйте ключ в `.env.example`, исходный код, issue, commit или логи.
 
 Остановка контейнеров:
 
@@ -71,13 +61,6 @@ npm run dev
 ```
 
 Откройте <http://127.0.0.1:5173> и нажмите **Start bundled demo**. Интерфейс покажет безопасный execution trace, затем проверенные top-20, кластеры, направленный 1–2-hop ego graph, локальный review case и скачиваемые файлы. **Reset demo** доступен после завершения run. Подробности: [frontend/README.md](frontend/README.md).
-
-Для анализа собственных данных выберите в UI один или несколько UTF-8 CSV с
-точными колонками `src,dst,date,sum_kzt`, укажите seed-GID и нажмите
-**Prepare dataset**. Сервер объединит файлы, построит четырёхуровневую сеть,
-создаст канонические parquet и запустит тот же проверяемый pipeline. Импорт
-ограничен 12 файлами и 25 МБ; сеть выбранных seed должна содержать не менее
-20 клиентов. Excel пока не принимается из-за риска потери точности длинных GID.
 
 ```bash
 python -m pip install -r backend/requirements-api-dev.txt
@@ -204,7 +187,7 @@ Live orchestrator использует OpenAI Responses API с function calling 
 В Windows PowerShell используйте `.\.venv\Scripts\python.exe -m pip install -e 'backend[live]'`.
 
 ```dotenv
-DEMO_MODE=true
+DEMO_MODE=false
 OPENAI_API_KEY=<ваш существующий ключ>
 OPENAI_MODEL=gpt-5-mini
 ```
@@ -218,7 +201,7 @@ OPENAI_MODEL=gpt-5-mini
 
 Через HTTP API создайте run с `{"dataset_id":"bundled","mode":"live"}`, затем вызовите `/execute`. Ключ нельзя добавлять в исходный код, логи или коммиты.
 
-CLI по умолчанию запускается с `--mode demo`. Настройка API `DEMO_MODE=true` также выбирает demo для новых runs без явного `mode` и разрешает локальный demo reset, но не мешает явно выбрать **OpenAI live** в UI или передать `mode=live` через API. `DEMO_MODE=false` меняет только режим по умолчанию на live и отключает reset. Demo заменяет только model provider — аналитика, tools, case, экспорт и проверка остаются настоящими.
+CLI по умолчанию запускается с `--mode demo`. Настройка API `DEMO_MODE=true` также выбирает demo для новых runs без явного `mode` и разрешает локальный demo reset; `DEMO_MODE=false` меняет режим по умолчанию на live и отключает reset. Demo заменяет только model provider — аналитика, tools, case, экспорт и проверка остаются настоящими.
 
 Автоматические тесты live-provider используют имитацию транспорта Responses. Настоящий внешний запрос к OpenAI API ими не проверяется.
 
