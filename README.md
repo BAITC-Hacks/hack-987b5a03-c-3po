@@ -2,7 +2,41 @@
 
 AML Agent превращает обезличенный граф банковских переводов в объяснимую очередь проверок для AML-аналитика. Система проверяет входные данные, рассчитывает детерминированные графовые признаки, назначает роли, ранжирует цели, создаёт локальный review case и независимо проверяет полученные артефакты.
 
-> Текущий статус: реализованы фазы 0–3. Детерминированный pipeline и ограниченный agent orchestrator используют настоящую аналитику, контролируемые tools, SQLite-аудит, локальный review case и независимую проверку. HTTP API, UI и Docker запланированы в фазах 4–6 из [TODO.md](TODO.md).
+> Текущий статус: работают детерминированная аналитика, CLI agent и FastAPI на встроенном датасете (фазы 0–4). React UI и Docker Compose ещё не реализованы; состояние задач отражено в [TODO.md](TODO.md).
+
+## Запуск HTTP API и demo
+
+Из корня репозитория, с Python 3.12+ (macOS/Linux):
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r backend/requirements.lock
+python -m pip install --no-deps --no-build-isolation -e backend
+python -m pip install -r backend/requirements-api.txt
+python -m uvicorn backend.app.main:create_app --factory --host 127.0.0.1 --port 8000 --workers 1
+```
+
+Windows PowerShell, без активации окружения:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements.lock
+.\.venv\Scripts\python.exe -m pip install --no-deps --no-build-isolation -e backend
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements-api.txt
+.\.venv\Scripts\python.exe -m uvicorn backend.app.main:create_app --factory --host 127.0.0.1 --port 8000 --workers 1
+```
+
+Откройте [интерактивную документацию API](http://127.0.0.1:8000/docs) или [health](http://127.0.0.1:8000/health).
+`/health` показывает доступность backend. В `/docs` создайте run через `POST /api/runs` с `{"dataset_id":"bundled","mode":"demo"}`, затем передайте полученный `run_id` в `POST /api/runs/{run_id}/execute`. Дождитесь `status=completed` и `verification_status=passed` в `GET /api/runs/{run_id}`; только после этого доступны оценки узлов, case и проверенные файлы. API принимает только встроенный `dataset_id=bundled`, без загрузки произвольных parquet. В demo-режиме API-ключ не нужен. Используйте один Uvicorn worker: координация выполняющихся запусков находится в памяти процесса.
+
+```bash
+python -m pip install -r backend/requirements-api-dev.txt
+python -m pytest backend/tests/api -q
+python -m ruff check backend/app/api backend/app/config.py backend/app/main.py backend/tests/api
+```
+
+Тесты `backend/tests/api/` проверяют HTTP-контракт и полный golden path на настоящем backend. Зависимости HTTP зафиксированы отдельно от `backend/requirements.lock`. Для полного набора установите также `backend/requirements-api-dev.txt`, затем запустите `python -m pytest backend/tests -q` в активированном окружении (Windows без активации: `.\.venv\Scripts\python.exe -X utf8 -m pytest backend\tests -q`).
 
 ## Проблема
 
@@ -99,6 +133,7 @@ FastAPI-приложение (фаза 4) ---- SQLite-хранилище run/cas
 - [Аналитические правила](docs/ANALYTICS.md)
 - [Контракты tools](docs/TOOLS.md)
 - [Agent loop](docs/AGENT_LOOP.md)
+- [HTTP API](docs/API.md)
 - [План реализации](TODO.md)
 
 ## Настройка OpenAI
@@ -190,18 +225,24 @@ PYTHONPATH=backend .venv/bin/python -m pytest backend/tests -q
 |   |-- AGENT_LOOP.md
 |   |-- ANALYTICS.md
 |   |-- ARCHITECTURE.md
+|   |-- API.md
 |   |-- DATA_MODEL.md
 |   `-- TOOLS.md
 |-- backend/
+|   |-- app/api/          # Phase 4 HTTP routes, DTOs, SSE, adapters
+|   |-- app/config.py
+|   |-- app/main.py
 |   |-- aml_agent/
 |   |   |-- agent/
 |   |   |-- analytics/
 |   |   |-- storage/
 |   |   |-- tools/
 |   |   `-- tool_runtime.py
-|   |-- tests/
+|   |-- tests/            # Phase 1–3 tests and Phase 4 tests/api/
 |   |-- pyproject.toml
-|   `-- requirements.lock
+|   |-- requirements.lock
+|   |-- requirements-api.txt
+|   `-- requirements-api-dev.txt
 |-- starter/
 |   |-- README.md
 |   |-- requirements.txt

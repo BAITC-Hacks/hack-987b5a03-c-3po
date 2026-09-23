@@ -65,12 +65,14 @@
 
 ## Фаза 4 — FastAPI golden path, P0
 
-- [ ] Добавить проверку настроек и `/health`.
-- [ ] Добавить endpoints создания и выполнения run, статуса, event stream, узла, кластера, case и артефактов.
-- [ ] Передавать каждый GID в API только строкой.
-- [ ] Добавить SSE event streaming.
-- [ ] Добавить pagination и ограниченные ego-graph queries.
-- [ ] Добавить API integration tests для golden path.
+- [x] Добавить проверку настроек и `/health`.
+- [x] Добавить endpoints создания и выполнения run, статуса, event stream, узла, кластера, case и артефактов.
+- [x] Передавать каждый GID в API только строкой.
+- [x] Добавить SSE event streaming.
+- [x] Добавить pagination и ограниченные ego-graph queries.
+- [x] Добавить API integration tests для golden path на настоящем backend.
+
+HTTP-контракт и полный интеграционный тест описаны в [docs/API.md](docs/API.md).
 
 Критерий выхода: весь workflow выполняется только через документированные HTTP endpoints.
 

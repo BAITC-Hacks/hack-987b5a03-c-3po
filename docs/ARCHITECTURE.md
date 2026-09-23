@@ -78,7 +78,7 @@ starter/
 docs/
 ```
 
-Фазы 3–5 добавляют модули provider/orchestrator, FastAPI routes и приложение `frontend/`, не перемещая уже реализованные границы analytics и storage.
+Фазы 3–4 добавили provider/orchestrator и FastAPI routes без переноса границ analytics и storage. Приложение `frontend/` относится к фазе 5.
 
 ## 5. Правила зависимостей
 
@@ -91,7 +91,7 @@ docs/
 
 ## 6. Runtime flow
 
-1. `POST /api/runs` создаёт run для встроенного датасета или загруженного проверенного пакета.
+1. `POST /api/runs` создаёт run для встроенного датасета. Загрузка пользовательских пакетов пока не поддерживается.
 2. `POST /api/runs/{run_id}/execute` запускает orchestrator.
 3. Events tools сохраняются до передачи через SSE в `GET /api/runs/{run_id}/events`.
 4. Аналитические артефакты записываются в `artifacts/{run_id}/` атомарно: сначала временный файл, затем rename.
@@ -100,6 +100,8 @@ docs/
 7. Только проверенный run может перейти в `completed` или открыть финальные downloads.
 
 ## 7. API surface
+
+HTTP-реализация и контракт её интеграции с фазами 1–3 описаны в [API.md](API.md).
 
 | Метод | Путь | Назначение |
 |---|---|---|
