@@ -65,7 +65,7 @@ def test_http_golden_path_contract(client, backend, executor):
 
 
 def test_unwired_app_is_honest_and_startable(settings):
-    with TestClient(create_app(settings)) as client:
+    with TestClient(create_app(settings, integrate=False)) as client:
         assert client.get("/health").json()["backend_ready"] is False
         assert client.get("/docs").status_code == 200
         response = client.post("/api/runs", json={})

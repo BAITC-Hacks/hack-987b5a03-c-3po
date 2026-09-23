@@ -1,4 +1,4 @@
-"""ASGI factory; Phases 1–3 integrate by supplying the two public ports."""
+"""ASGI factory and composition root for the Phase 4 HTTP API."""
 
 from contextlib import asynccontextmanager
 
@@ -8,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .api.errors import AppError
+from .api.phase_adapter import PhaseRunBackend
+from .api.phase_executor import PhaseRunExecutor
 from .api.ports import RunBackend, RunExecutor
 from .api.routes import router
 from .api.service import ApiService
@@ -19,8 +21,16 @@ def create_app(
     *,
     backend: RunBackend | None = None,
     executor: RunExecutor | None = None,
+    integrate: bool = True,
 ) -> FastAPI:
     settings = settings or Settings()
+    if integrate and backend is None and executor is None:
+        backend = PhaseRunBackend(
+            settings, settings.database_path, settings.artifacts_dir, settings.data_dir
+        )
+        executor = PhaseRunExecutor(
+            settings, settings.database_path, settings.artifacts_dir, settings.data_dir
+        )
 
     @asynccontextmanager
     async def lifespan(app):
@@ -34,7 +44,7 @@ def create_app(
         title="AML Agent API",
         version="0.1.0",
         lifespan=lifespan,
-        description="Phase 4 HTTP boundary. A Phase 1–3 adapter is required for run execution.",
+        description="Run the verified AML analysis over the bundled dataset.",
     )
 
     @app.exception_handler(AppError)

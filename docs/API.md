@@ -2,24 +2,23 @@
 
 ## Implementation status
 
-The HTTP layer is implemented without importing or replacing Phases 1–3. Its
-entry point is `backend.app.main.create_app`. Phase 1–2 analytics, storage,
-tools, and verification are implemented in `backend/aml_agent`. Phase 3 owns
-the orchestrator and is still pending. The HTTP integration adapter is pending.
-
-The default factory provides `/health`, `/docs`, and `/openapi.json`. Without
-injected adapters, `/health` returns HTTP 200 with `backend_ready: false`, while
-run/case/query/download/reset operations return `503 BACKEND_NOT_CONFIGURED`.
-This is API liveness, not readiness of the complete AML workflow.
+The default `backend.app.main.create_app` factory connects the Phase 1–2 analytics,
+storage, tools, and verification to the Phase 3 orchestrator. It runs the actual
+bundled dataset through the Phase 4 HTTP API. `/health` returns HTTP 200 with
+`backend_ready: true` when SQLite and the bundled parquet files are available.
+For isolated contract tests, `create_app(settings, integrate=False)` leaves the
+backend unconfigured and reports `backend_ready: false`.
 
 `backend/tests/api/fakes.py` contains test doubles only. Neither this module nor
 its fabricated assessments are imported by the application or used in demo mode.
-The full Phase 4 exit criterion in TODO.md remains pending until real adapters
-are wired to the implemented Phase 1–2 core and the Phase 3 orchestrator.
+The real HTTP golden-path test runs create, execute, event replay, queries, case,
+downloads, restart, and demo reset against the bundled dataset.
 
 ## Launch and settings
 
-Run from the repository root after installing `backend/requirements-api.txt`:
+Run from the repository root with Python 3.12+ after installing
+`backend/requirements.lock`, editable `backend`, and
+`backend/requirements-api.txt`:
 
 ```bash
 python -m uvicorn backend.app.main:create_app --factory --host 127.0.0.1 --port 8000 --workers 1
@@ -28,7 +27,7 @@ python -m uvicorn backend.app.main:create_app --factory --host 127.0.0.1 --port 
 Settings read the repository-root `.env`, with environment variables taking
 precedence. Paths in settings are relative to the repository root. API payloads
 never accept filesystem paths. `DATABASE_URL` must reference a local SQLite file;
-the HTTP layer does not open it. The adapter owns database initialization/recovery.
+the Phase 4 adapter initializes it and preserves completed state across restarts.
 
 Important settings from `.env.example`:
 
@@ -65,9 +64,9 @@ Interactive schemas, all query parameters, and complete response fields are in
 | POST | `/api/runs/{run_id}/execute` | 202 execution accepted/already active; 200 for an immutable completed run |
 | GET | `/api/runs/{run_id}` | State, executing flag, counts, warnings, case ID, verification, terminal decision |
 | GET | `/api/runs/{run_id}/events` | Persisted SSE events; supports replay, follow, and reconnect |
-| GET | `/api/runs/{run_id}/nodes` | Paginated and filterable stored assessments |
+| GET | `/api/runs/{run_id}/nodes` | Paginated and filterable verified assessments |
 | GET | `/api/runs/{run_id}/nodes/{gid}` | Node assessment, cluster, and bounded directed ego graph |
-| GET | `/api/runs/{run_id}/clusters` | Paginated stored cluster summaries |
+| GET | `/api/runs/{run_id}/clusters` | Paginated verified cluster summaries |
 | GET | `/api/cases/{case_id}` | Case with ordered immutable target snapshot |
 | GET | `/api/runs/{run_id}/artifacts/{name}` | Verified bytes with attachment filename and SHA-256 ETag |
 | POST | `/api/demo/reset` | Count of removed demo runs; live state must be preserved |
@@ -165,15 +164,16 @@ exceptions are contained before reaching the ASGI server logger. Adapter-raised
 `AppError` messages must themselves be fixed, safe user-facing text. Capacity
 responses include `Retry-After: 1`. Unknown router paths retain FastAPI's default 404.
 
-## Connecting Phases 1–3 later
+## Phase 1–3 integration
 
-Implement `RunBackend` and `RunExecutor` from `backend/app/api/ports.py`, then pass
-both into the application factory. Neither HTTP routes nor the frontend should
-import storage internals or calculate analytical metrics.
+`PhaseRunBackend` and `PhaseRunExecutor` implement the ports in
+`backend/app/api/ports.py` and are created by the default factory. HTTP routes
+do not import storage internals or calculate analytical metrics. Tests can still
+inject alternate port implementations:
 
 ```python
-# In the future composition root, using real Phase 2/3 adapter implementations:
-app = create_app(settings, backend=repository_adapter, executor=orchestrator_adapter)
+app = create_app(settings)  # real bundled workflow
+test_app = create_app(settings, backend=fixture_backend, executor=fixture_executor)
 ```
 
 `RunBackend` methods return validated HTTP DTOs. Map the domain/storage models in
@@ -182,12 +182,12 @@ are synchronous and thread-safe; the API executes blocking operations in its
 thread pool. `RunExecutor.execute_run` is async and must offload CPU/SQLite work.
 It receives only a run UUID and drives the registered tools from Phase 3.
 
-Required integration invariants:
+Integration invariants:
 
 1. `claim_execution` is atomic across repeated requests. Completed runs are
    immutable; failed runs cannot be silently resumed. Recover stale claims on
    application startup without resetting analytical state or tool idempotency.
-2. `list_nodes`/`list_clusters` return persisted results, including every orphan
+2. `list_nodes`/`list_clusters` return verified results, including every orphan
    seed. Return 404 for unknown runs and 409 before assessments are available.
 3. `list_events(after, limit)` returns only this run's committed safe DTOs in
    strictly increasing sequence. Commit the final event and terminal status in
@@ -202,14 +202,14 @@ Required integration invariants:
 6. `read_artifact` returns owned allowlisted bytes and their persisted checksum.
    `reset_demo` enforces its own transaction/claim checks, not just API checks.
 
-The Phase 2 repository currently stores tool results and export snapshots rather
-than separate persisted node/edge/cluster tables. The adapter must obtain HTTP
-queries from verified snapshots or approved read services; it must not make the
-API depend on private in-memory runtime caches. The Phase 2 case stores ordered
-target GIDs; the adapter must join the stored ranking for `CaseView.targets`.
+Phase 2 persists tool results and verified export files instead of full assessment
+tables. `PhaseRunBackend` reads roles, scores, clusters, and ranking from those
+checksummed exports and recomputes graph features with the public deterministic
+analytics library against the original dataset fingerprint. It does not rely on
+in-memory runtime caches. Read endpoints return 409 until the run is completed
+and verified. The case stores ordered target GIDs, matched against the verified
+ranking in `top_nodes.csv`.
 
-After wiring, drive the real workflow through HTTP alone: create, execute, consume
-events, read status/nodes/clusters/case, and download all mandatory files. Verify
-2,248 assessments, at least 20 ranked targets, all 19 orphan seeds, depth-boundary
-uncertainty, unchanged GID digits, exact case snapshot, passed independent checks,
-and deterministic CSVs. Then close the Phase 4 integration follow-up in TODO.md.
+The real HTTP integration test checks 2,248 assessments, 91 clusters, 20 case
+targets, boundary uncertainty, string GIDs, independent verification, event
+replay, checksummed downloads, restart, missing live key, and reset isolation.
