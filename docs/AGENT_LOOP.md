@@ -1,19 +1,20 @@
-# AML Agent loop
+# Цикл AML Agent
 
-## 1. Purpose
+## 1. Назначение
 
-The orchestrator is a bounded state machine, not an open-ended chat. Its job is to select the next valid tool, react to tool results, create one local review case, require verification, and return a structured outcome.
+Orchestrator — ограниченная state machine, а не открытый chat. Его задача — выбрать следующий допустимый tool, обработать результат, создать один локальный review case, потребовать verification и вернуть структурированный результат.
 
-## 2. Inputs to the model
+## 2. Входные данные модели
 
-For each turn the provider receives:
+На каждом шаге provider получает:
 
-1. A stable system instruction describing scope, safety language, and the completion condition.
-2. A compact `RunContext` containing `run_id`, current state, mode, completed tools, counts, warnings, remaining tool budget, and whether analyst confirmation is required.
-3. Only the function tools allowed in the current persisted state.
-4. Previous tool-call items and application-produced `function_call_output` items linked by `call_id`.
+1. Стабильную system instruction с границами задачи, правилами безопасных формулировок и условием завершения.
+2. Компактный `RunContext`: `run_id`, текущее состояние, режим, завершённые tools, счётчики, предупреждения, оставшийся бюджет tools и необходимость подтверждения аналитика.
+3. Только function tools, разрешённые в текущем сохранённом состоянии.
+4. Предыдущие tool-call items и созданные приложением `function_call_output`, связанные через `call_id` во время текущего запуска.
 
-Raw parquet content, full graph dumps, secrets, local paths, SQL, and internal exception traces are never sent.
+Содержимое parquet целиком, полные выгрузки графа, секреты, локальные пути, SQL и внутренние stack traces никогда не отправляются модели.
+Цепочка Responses хранится только во время текущего выполнения. Возобновлённый run начинает новую цепочку по сохранённому состоянию и ranking snapshot, без хранения transcript модели.
 
 ## 3. State machine
 
@@ -38,62 +39,72 @@ case_created
 exported
   -> verify_run
 verified
-  -> completed
+  -> completed (runtime записывает terminal audit events после успешной проверки)
 ```
 
-A tool result changes state only inside its transaction. The model cannot claim or set a state directly.
+Результат tool меняет состояние только внутри своей транзакции. Модель не может самостоятельно объявить или установить состояние. После успешного `verify_run` рабочий runtime записывает события проверки и завершения, а затем сразу переводит run в `completed`. Orchestrator проверяет конечное решение по сохранённым case и результату verification.
 
-## 4. Loop pseudocode
+Если на этапе `ranked` установлено `analyst_confirmation_required`, выполнение возвращает `needs_user_action` до создания case.
+
+## 4. Псевдокод цикла
 
 ```python
 async def execute_run(run_id: UUID) -> AgentDecision:
-    for step in range(settings.openai_max_tool_calls):
+    used_tool_calls = 0
+    previous_response_id = None
+    while True:
         context = run_repository.get_compact_context(run_id)
 
-        if context.state == RunState.VERIFIED:
-            return complete_from_persisted_state(context)
+        if context.state in (RunState.VERIFIED, RunState.COMPLETED):
+            decision = await provider.final_decision(context, previous_response_id)
+            return complete_only_if_verification_passed(context, decision)
+
+        if used_tool_calls >= settings.openai_max_tool_calls:
+            return fail(run_id, code="TOOL_BUDGET_EXCEEDED")
 
         tools = tool_registry.allowed_definitions(context.state)
         response = await provider.respond(
             context=context,
             tools=tools,
-            previous_response_id=context.previous_response_id,
+            previous_response_id=previous_response_id,
         )
+        previous_response_id = response.response_id
 
         calls = validate_function_calls(response, tools)
         if not calls:
             raise InvalidAgentResponse("A valid next tool is required")
 
         for call in calls:
-            event_store.tool_started(run_id, call.name, sanitized(call.arguments))
             result = await tool_registry.execute(call.name, call.arguments)
-            event_store.tool_completed(run_id, summarize(result))
-            provider.add_tool_output(call_id=call.call_id, output=result)
+            used_tool_calls += 1
+            # ToolRuntime сохраняет события tools и verification в SQLite.
+            provider.add_tool_output(call_id=call.call_id, output=safe_summary(result))
 
             if not result.ok and not result.error.retriable:
                 return fail_from_tool_result(result)
 
-    return fail(run_id, code="TOOL_BUDGET_EXCEEDED")
 ```
 
-The implementation may execute only one state-changing tool per loop iteration. Read-only `get_node_evidence` calls can be batched up to three targets.
+Конечное решение использует Structured Outputs. Если ответ модели после verification невалиден, содержит refusal или превышает timeout, orchestrator берёт фиксированное локальное решение из сохранённого состояния. Формулировка модели не меняет case snapshot, проверки или условие завершения.
 
-## 5. System instruction contract
+За одну итерацию разрешён только один tool, изменяющий состояние. Read-only вызовы `get_node_evidence` можно объединять максимум для трёх целей.
 
-The production system instruction must enforce these points:
+## 5. Контракт system instruction
 
-- You are AML Agent, an investigation workflow orchestrator.
-- Use only available function tools and obey their current-state descriptions.
-- Never infer guilt, identity, occupation, income, or attributes absent from the dataset.
-- Never calculate or alter graph metrics yourself.
-- Describe findings as structural indicators or review hypotheses.
-- Treat depth-4 missing outflow and seed inflow as explicit uncertainty.
-- Create exactly one local review case from the persisted ranking.
-- Select the case title only from the server-approved cautious allowlist; never invent a guilt or criminal label.
-- A run is complete only when `verify_run` returns `passed: true`.
-- Do not reveal hidden reasoning. Produce short decisions and safe tool summaries only.
+Production system instruction обязана закреплять следующие правила:
 
-## 6. Provider interface
+- Ты — AML Agent, orchestrator workflow проверки.
+- Используй только доступные function tools и соблюдай ограничения текущего состояния.
+- Не делай выводы о виновности, личности, профессии, доходе или отсутствующих в данных атрибутах.
+- Не рассчитывай и не изменяй графовые метрики самостоятельно.
+- Описывай результаты как структурные индикаторы или гипотезы для проверки.
+- Явно учитывай неопределённость из-за отсутствующего outflow на `depth=4` и неполного inflow seed-клиентов.
+- Создай ровно один локальный review case по сохранённому ranking.
+- Выбирай title case только из утверждённого сервером осторожного allowlist; не придумывай обвинительные или криминальные метки.
+- Run считается завершённым, только когда `verify_run` возвращает `passed: true`.
+- Не раскрывай hidden reasoning. Возвращай только короткие решения и безопасные сводки tools.
+
+## 6. Интерфейс provider
 
 ```python
 class AgentProvider(Protocol):
@@ -107,20 +118,20 @@ class AgentProvider(Protocol):
 
 ### OpenAIResponsesProvider
 
-- Uses the official OpenAI Python SDK and Responses API.
-- Reads model and timeout from settings.
-- Sends strict function definitions from the registry.
-- Returns normalized calls containing `call_id`, tool name, and validated arguments.
-- Uses Structured Outputs for the terminal `AgentDecision`.
+- Использует официальный OpenAI Python SDK и Responses API.
+- Читает модель и timeout из settings.
+- Передаёт строгие function definitions из registry.
+- Возвращает нормализованные вызовы с `call_id`, именем tool и проверенными аргументами.
+- Использует Structured Outputs для конечного `AgentDecision`.
 
 ### DeterministicDemoProvider
 
-- Uses the same persisted state and same tool registry.
-- Selects the only valid next state-changing tool from a static policy.
-- Uses deterministic templates for titles, warnings, and summaries.
-- Does not fake analytics, case writes, exports, events, or verification.
+- Использует то же сохранённое состояние и тот же registry tools.
+- Выбирает единственный допустимый следующий изменяющий состояние tool по статической политике.
+- Использует детерминированные шаблоны для titles, warnings и summaries.
+- Не подменяет аналитику, запись case, экспорт, events или verification.
 
-## 7. Terminal decision schema
+## 7. Схема конечного решения
 
 ```json
 {
@@ -155,24 +166,24 @@ class AgentProvider(Protocol):
 }
 ```
 
-`case_id` is non-null only after a case is persisted. `completed` is accepted only when repository verification status is `passed`, regardless of model text.
+`case_id` не равен null только после сохранения case. Значение `completed` принимается только при `verification_status=passed` в repository, независимо от текста модели.
 
-## 8. Error and retry policy
+## 8. Политика ошибок и повторов
 
-| Failure | Behavior |
+| Ошибка | Поведение |
 |---|---|
-| OpenAI timeout | Retry once, then continue with deterministic provider if the current transition is unambiguous |
-| Missing API key in live mode | Return `needs_user_action`; never log the environment value |
-| Invalid model arguments | Reject before tool execution and request one corrected call |
-| Non-retriable data error | Stop run and expose actionable validation evidence |
-| Retriable analytics/storage error | Retry tool once using the same idempotency key |
-| Case already exists | Return existing case with `idempotent_replay: true` |
-| Verification failure | Persist failed checks; do not mark run complete |
-| Tool budget exhausted | Fail safely and retain all completed artifacts for diagnosis |
+| Timeout OpenAI | Повторить один раз, затем продолжить с deterministic provider, если текущий переход однозначен |
+| Нет API-ключа в live mode | Вернуть `needs_user_action`; никогда не логировать значение environment variable |
+| Невалидные аргументы модели | Отклонить до выполнения tool и запросить один исправленный вызов |
+| Неповторяемая ошибка данных | Остановить run и показать применимые результаты валидации |
+| Повторяемая ошибка analytics/storage | Повторить tool один раз с тем же idempotency key |
+| Case уже существует | Вернуть существующий case с `idempotent_replay: true` |
+| Ошибка verification | Сохранить failed checks; не помечать run завершённым |
+| Бюджет tools исчерпан | Безопасно завершить с ошибкой и сохранить выполненные артефакты для диагностики |
 
-## 9. UI trace policy
+## 9. Политика UI trace
 
-Allowed trace content:
+Разрешённое содержимое trace:
 
 ```text
 Agent started
@@ -188,15 +199,15 @@ OK case AML-2026-07-001 created with 20 targets
 OK all mandatory checks passed
 ```
 
-Do not expose prompts, hidden reasoning, token-level thoughts, stack traces, secrets, or unbounded raw tool output.
+Нельзя показывать prompts, hidden reasoning, token-level thoughts, stack traces, секреты и неограниченный raw output tools.
 
-## 10. Golden-path completion criteria
+## 10. Критерии завершения golden path
 
-The loop succeeds only when:
+Цикл считается успешным только если:
 
-- all 2,248 nodes have a valid role, cluster, score, and evidence;
-- at least 20 targets are ranked;
-- a review case contains the exact ranked snapshot;
-- all required files exist with valid hashes and schemas;
-- `verify_run` passes;
-- the UI receives a completed event and shows the after-state.
+- все 2 248 узлов имеют валидные role, cluster, score и evidence;
+- ранжировано не менее 20 целей;
+- review case содержит точный snapshot ranking;
+- все обязательные файлы существуют и имеют валидные hashes и schemas;
+- `verify_run` завершён успешно;
+- UI получил событие completed и показывает состояние после выполнения.
