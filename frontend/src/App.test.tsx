@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import App from "./App";
 
@@ -35,7 +41,9 @@ const completed = {
     n_clusters: 91,
     ranked_count: 20,
   },
-  warnings: ["Depth-4 recipients remain boundary-limited."],
+  warnings: [
+    "Depth-4 nodes may be truncated by the four-hop collection boundary.",
+  ],
   result: {
     status: "completed",
     summary: "Review case created and verified.",
@@ -125,7 +133,7 @@ describe("bundled demo workflow", () => {
           return json({
             case_id: caseId,
             run_id: runId,
-            title: "Connected transfer community for analyst review",
+            title: "Priority structural indicators for analyst review",
             status: "ready_for_review",
             target_gids: [gid],
             created_at: "2026-09-23T08:00:05Z",
@@ -169,21 +177,44 @@ describe("bundled demo workflow", () => {
     expect(
       requests.some((request) => request.path === `/api/runs/${runId}/execute`),
     ).toBe(true);
-    expect(screen.getByText("VERIFIED")).toBeTruthy();
+    expect(screen.getByText("Verified")).toBeTruthy();
     expect(
       screen.getByText("Run completed after passed verification"),
     ).toBeTruthy();
     expect(
-      screen.getByText("Depth-4 recipients remain boundary-limited."),
+      screen.getByText(
+        "Depth-4 nodes may be truncated by the four-hop collection boundary.",
+      ),
     ).toBeTruthy();
     expect(
-      screen.getByText("Connected transfer community for analyst review"),
+      screen.getByText("Priority structural indicators for analyst review"),
     ).toBeTruthy();
     expect(
       screen
         .getByRole("link", { name: /Node assessments/i })
         .getAttribute("href"),
     ).toBe(`/api/runs/${runId}/artifacts/nodes_roles.csv`);
+
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "Select language" }),
+      {
+        target: { value: "ru" },
+      },
+    );
+    expect(screen.getByText("Запуск завершён после проверки")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Узлы на глубине 4 могут быть обрезаны границей сбора данных.",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("heading", {
+        name: "Приоритетные структурные признаки для проверки аналитиком",
+      }),
+    ).toBeTruthy();
+    fireEvent.change(screen.getByRole("combobox", { name: "Выбрать язык" }), {
+      target: { value: "en" },
+    });
 
     fireEvent.click(screen.getByRole("button", { name: `View client ${gid}` }));
     await screen.findByRole("dialog", { name: `Client ${gid} detail` });
@@ -209,5 +240,123 @@ describe("bundled demo workflow", () => {
     await waitFor(() =>
       expect(sessionStorage.getItem("aml-agent-demo-run-id")).toBeNull(),
     );
+  });
+
+  it("waits for independent verification before loading a case", async () => {
+    const requests: string[] = [];
+    let phase: "case_created" | "completed" = "case_created";
+    sessionStorage.setItem("aml-agent-demo-run-id", runId);
+    vi.stubGlobal("EventSource", MockEventSource);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const path = String(input);
+        requests.push(path);
+        if (path === "/health")
+          return json({
+            status: "ok",
+            mode: "demo",
+            backend_ready: true,
+            live_configured: false,
+          });
+        if (path === `/api/runs/${runId}`)
+          return json(
+            phase === "completed"
+              ? completed
+              : {
+                  ...created,
+                  case_id: caseId,
+                  status: "case_created",
+                  executing: true,
+                },
+          );
+        if (path === `/api/runs/${runId}/events?follow=false`)
+          return new Response("", {
+            headers: { "content-type": "text/event-stream" },
+          });
+        if (path === `/api/runs/${runId}/nodes?limit=20&offset=0`)
+          return json({ items: [], total: 0, limit: 20, offset: 0 });
+        if (path === `/api/runs/${runId}/clusters?limit=100&offset=0`)
+          return json({ items: [], total: 0, limit: 100, offset: 0 });
+        if (path === `/api/cases/${caseId}`)
+          return json({
+            case_id: caseId,
+            run_id: runId,
+            title: "Priority structural indicators for analyst review",
+            status: "ready_for_review",
+            target_gids: [gid],
+            created_at: "2026-09-23T08:00:05Z",
+          });
+        throw new Error(`Unexpected request: ${path}`);
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText("Analysis in progress");
+    expect(requests).not.toContain(`/api/cases/${caseId}`);
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    phase = "completed";
+    await waitFor(() => expect(requests).toContain(`/api/cases/${caseId}`), {
+      timeout: 3000,
+    });
+    await screen.findByText(
+      "Priority structural indicators for analyst review",
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("moves the active navigation state and switches all three languages", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json({
+          status: "ok",
+          mode: "demo",
+          backend_ready: true,
+          live_configured: false,
+        }),
+      ),
+    );
+    const view = render(<App />);
+    const sidebar = screen.getAllByRole("navigation", {
+      name: "Workspace sections",
+    })[0];
+    const workflow = within(sidebar).getByRole("link", {
+      name: "Run workflow",
+    });
+    fireEvent.click(workflow);
+    expect(workflow.getAttribute("aria-current")).toBe("location");
+    expect(
+      within(sidebar)
+        .getByRole("link", { name: "Overview" })
+        .getAttribute("aria-current"),
+    ).toBeNull();
+
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "Select language" }),
+      { target: { value: "ru" } },
+    );
+    expect(
+      screen.getByRole("heading", { name: "Запуск анализа" }),
+    ).toBeTruthy();
+    expect(window.localStorage.getItem("aml-agent-language")).toBe("ru");
+    fireEvent.change(screen.getByRole("combobox", { name: "Выбрать язык" }), {
+      target: { value: "kk" },
+    });
+    expect(
+      screen.getByRole("heading", { name: "Талдауды іске қосу" }),
+    ).toBeTruthy();
+    expect(document.documentElement.lang).toBe("kk");
+    view.unmount();
+    render(<App />);
+    expect(
+      screen.getByRole("heading", { name: "Талдауды іске қосу" }),
+    ).toBeTruthy();
+    fireEvent.change(screen.getByRole("combobox", { name: "Тілді таңдау" }), {
+      target: { value: "en" },
+    });
+    expect(screen.getByRole("heading", { name: "Run workflow" })).toBeTruthy();
+    expect(screen.queryByText("API connected")).toBeNull();
   });
 });

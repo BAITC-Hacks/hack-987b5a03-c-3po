@@ -13,6 +13,7 @@ venv/
 
 # Build and test output
 dist/
+.vite/
 build/
 coverage/
 artifacts/
