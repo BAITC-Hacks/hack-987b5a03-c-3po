@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
 import cytoscape from "cytoscape";
 import type { EgoGraph, Gid } from "./types";
+import { t, type Language } from "./i18n";
 
 interface Props {
   graph: EgoGraph;
   focusGid: Gid;
   onSelect: (gid: Gid) => void;
+  language: Language;
 }
 
 const roleColors: Record<string, string> = {
@@ -17,7 +19,12 @@ const roleColors: Record<string, string> = {
   peripheral: "#8b9aac",
 };
 
-export default function GraphView({ graph, focusGid, onSelect }: Props) {
+export default function GraphView({
+  graph,
+  focusGid,
+  onSelect,
+  language,
+}: Props) {
   const container = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -29,7 +36,7 @@ export default function GraphView({ graph, focusGid, onSelect }: Props) {
           id: node.gid,
           label:
             node.gid === focusGid
-              ? `Selected · …${node.gid.slice(-6)}`
+              ? `${t("Selected", language)} · …${node.gid.slice(-6)}`
               : `…${node.gid.slice(-6)}`,
           color: roleColors[node.role] ?? "#8b9aac",
         },
@@ -96,14 +103,17 @@ export default function GraphView({ graph, focusGid, onSelect }: Props) {
     });
     instance.on("tap", "node", (event) => onSelect(event.target.id()));
     return () => instance.destroy();
-  }, [graph, focusGid, onSelect]);
+  }, [graph, focusGid, onSelect, language]);
 
   return (
     <div
       className="graph-canvas"
       ref={container}
       role="img"
-      aria-label="Directed transfer network around the selected client"
+      aria-label={t(
+        "Directed transfer network around the selected client",
+        language,
+      )}
     />
   );
 }

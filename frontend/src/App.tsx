@@ -33,6 +33,15 @@ import type {
   RunRecord,
   RunStatus,
 } from "./types";
+import {
+  LANGUAGE_KEY,
+  languageOptions,
+  locale,
+  t,
+  translateEvidence,
+  translateTrace,
+  type Language,
+} from "./i18n";
 
 const SESSION_KEY = "aml-agent-demo-run-id";
 const GraphView = lazy(() => import("./GraphView"));
@@ -61,6 +70,14 @@ const WORKFLOW = [
   { status: "case_created", label: "Create review case" },
   { status: "completed", label: "Verify results" },
 ] as const;
+const NAV = [
+  { id: "overview", label: "Overview" },
+  { id: "workflow", label: "Run workflow" },
+  { id: "targets", label: "Priority queue" },
+  { id: "network", label: "Network explorer" },
+  { id: "case", label: "Review case" },
+] as const;
+type SectionId = (typeof NAV)[number]["id"];
 const ARTIFACTS: { name: ArtifactName; label: string; description: string }[] =
   [
     {
@@ -93,8 +110,8 @@ function formatScore(score: number): string {
   return `${Math.round(score * 100)}%`;
 }
 
-function formatKzt(value: number): string {
-  return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value)} KZT`;
+function formatKzt(value: number, language: Language): string {
+  return `${new Intl.NumberFormat(locale[language], { maximumFractionDigits: 0 }).format(value)} KZT`;
 }
 
 function describeError(error: unknown): string {
@@ -180,6 +197,14 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
 }
 
 export default function App() {
+  const [language, setLanguage] = useState<Language>(() => {
+    const saved = window.localStorage?.getItem(LANGUAGE_KEY);
+    return saved === "ru" || saved === "kk" || saved === "en" ? saved : "en";
+  });
+  const [activeSection, setActiveSection] = useState<SectionId>(() => {
+    const hash = window.location.hash.slice(1);
+    return NAV.find((item) => item.id === hash)?.id ?? "overview";
+  });
   const [runId, setRunId] = useState<string | null>(() =>
     sessionStorage.getItem(SESSION_KEY),
   );
@@ -204,6 +229,31 @@ export default function App() {
   const ended = run ? FINAL_STATES.includes(run.status) : false;
   const completed =
     run?.status === "completed" && run.verification_status === "passed";
+
+  useEffect(() => {
+    if (completed) {
+      setError((current) =>
+        current === "Verified assessments are not yet available."
+          ? null
+          : current,
+      );
+    }
+  }, [completed]);
+
+  useEffect(() => {
+    window.localStorage?.setItem(LANGUAGE_KEY, language);
+    document.documentElement.lang = language;
+    document.title = `AML Agent · ${t("Analyst workspace", language)}`;
+  }, [language]);
+
+  useEffect(() => {
+    const syncSection = () => {
+      const hash = window.location.hash.slice(1);
+      setActiveSection(NAV.find((item) => item.id === hash)?.id ?? "overview");
+    };
+    window.addEventListener("hashchange", syncSection);
+    return () => window.removeEventListener("hashchange", syncSection);
+  }, []);
 
   const checkHealth = useCallback(async () => {
     setHealth("checking");
@@ -314,7 +364,9 @@ export default function App() {
   }, [runId, completed]);
 
   useEffect(() => {
-    if (!run?.case_id) return;
+    // The case ID is stored before exports and independent verification finish.
+    // The API intentionally rejects case reads until that verification passes.
+    if (!run?.case_id || !completed) return;
     let alive = true;
     void getCase(run.case_id)
       .then((item) => {
@@ -326,7 +378,7 @@ export default function App() {
     return () => {
       alive = false;
     };
-  }, [run?.case_id]);
+  }, [run?.case_id, completed]);
 
   useEffect(() => {
     if (!runId || !selectedGid) return;
@@ -430,6 +482,22 @@ export default function App() {
   const selectedCluster =
     clusters.find((cluster) => cluster.cluster_id === activeCluster) ??
     clusters[0];
+  const label = (text: string) => t(text, language);
+  const pretty = (value: string) => label(prettyStatus(value));
+  const activeLabel =
+    NAV.find((item) => item.id === activeSection)?.label ?? "Overview";
+  const navLinks = NAV.map((item) => (
+    <a
+      className={`nav-link ${activeSection === item.id ? "active" : ""}`}
+      href={`#${item.id}`}
+      key={item.id}
+      onClick={() => setActiveSection(item.id)}
+      aria-current={activeSection === item.id ? "location" : undefined}
+    >
+      <span className="nav-dot" />
+      {label(item.label)}
+    </a>
+  ));
 
   return (
     <div className="app-shell">
@@ -440,44 +508,25 @@ export default function App() {
           </span>
           <span>
             AML <strong>Agent</strong>
-            <small>Analyst workspace</small>
+            <small>{label("Analyst workspace")}</small>
           </span>
         </div>
-        <div className="sidebar-section-label">WORKSPACE</div>
-        <nav aria-label="Workspace sections">
-          <a className="nav-link active" href="#overview">
-            <span className="nav-dot" />
-            Overview
-          </a>
-          <a className="nav-link" href="#workflow">
-            <span className="nav-dot" />
-            Run workflow
-          </a>
-          <a className="nav-link" href="#targets">
-            <span className="nav-dot" />
-            Priority queue
-          </a>
-          <a className="nav-link" href="#network">
-            <span className="nav-dot" />
-            Network explorer
-          </a>
-          <a className="nav-link" href="#case">
-            <span className="nav-dot" />
-            Review case
-          </a>
-        </nav>
+        <div className="sidebar-section-label">{label("Workspace")}</div>
+        <nav aria-label={label("Workspace sections")}>{navLinks}</nav>
         <div className="sidebar-bottom">
           <div className="sidebar-callout">
             <Icon name="shield" size={18} />
             <div>
-              <strong>Decision support</strong>
+              <strong>{label("Decision support")}</strong>
               <p>
-                Roles and scores are review hypotheses, never findings of guilt.
+                {label(
+                  "Roles and scores are review hypotheses, never findings of guilt.",
+                )}
               </p>
             </div>
           </div>
           <span className="sidebar-version">
-            BUNDLED JULY 2026 · RULESET V1
+            {label("Bundled July 2026 · ruleset v1")}
           </span>
         </div>
       </aside>
@@ -485,40 +534,46 @@ export default function App() {
       <main className="main-content" id="overview">
         <header className="topbar">
           <div className="breadcrumb">
-            Workspace <span>/</span> Overview
+            {label("Workspace")} <span>/</span> {label(activeLabel)}
           </div>
           <div className="topbar-right">
-            <div className={`connection ${health}`}>
-              <span className="connection-dot" />
-              {health === "online"
-                ? "API connected"
-                : health === "checking"
-                  ? "Checking API"
-                  : "API unavailable"}
-            </div>
-            {health === "offline" && (
-              <button className="retry-link" onClick={() => void checkHealth()}>
-                Retry
-              </button>
-            )}
+            <label className="language-picker">
+              <span aria-hidden="true">{language.toUpperCase()}</span>
+              <select
+                aria-label={label("Select language")}
+                value={language}
+                onChange={(event) =>
+                  setLanguage(event.target.value as Language)
+                }
+              >
+                {languageOptions.map((option) => (
+                  <option value={option.value} key={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
         </header>
+        <nav className="mobile-nav" aria-label={label("Workspace sections")}>
+          {navLinks}
+        </nav>
         <div className="content-wrap">
           <section className="hero">
             <div className="hero-copy">
               <span className="eyebrow">
-                <span className="eyebrow-line" /> NETWORK INTELLIGENCE · JULY
-                2026
+                <span className="eyebrow-line" />{" "}
+                {label("Network intelligence · July 2026")}
               </span>
               <h1>
-                From transfer network
+                {label("From transfer network")}
                 <br />
-                to <em>review decision.</em>
+                <em>{label("to review decision.")}</em>
               </h1>
               <p>
-                Starting with 81 seed clients, trace July transfers across four
-                hops. See which accounts merit review first, why, and what
-                evidence supports that choice.
+                {label(
+                  "Starting with 81 seed clients, trace July transfers across four hops. See which accounts merit review first, why, and what evidence supports that choice.",
+                )}
               </p>
               <div className="hero-actions">
                 <button
@@ -527,7 +582,9 @@ export default function App() {
                   disabled={busy || health !== "online" || Boolean(runId)}
                 >
                   {busy ? <Spinner /> : <Icon name="spark" size={18} />}
-                  {runId ? "Run started" : "Start bundled demo"}{" "}
+                  {runId
+                    ? label("Run started")
+                    : label("Start bundled demo")}{" "}
                   {!busy && !runId && <Icon name="arrow" size={17} />}
                 </button>
                 {runId && (
@@ -536,7 +593,7 @@ export default function App() {
                     onClick={() => void reset()}
                     disabled={busy || !ended || Boolean(run?.executing)}
                   >
-                    Reset demo
+                    {label("Reset demo")}
                   </button>
                 )}
               </div>
@@ -544,7 +601,9 @@ export default function App() {
                 <span className="note-icon">
                   <Icon name="check" size={14} />
                 </span>
-                Real analytics, local case creation, independent verification
+                {label(
+                  "Real analytics, local case creation, independent verification",
+                )}
               </div>
             </div>
             <div className="hero-art" aria-hidden="true">
@@ -559,74 +618,93 @@ export default function App() {
               <span className="art-node node-c" />
               <span className="art-node node-d" />
               <div className="art-label">
-                EVIDENCE <span>→</span> ACTION
+                {label("Evidence")} <span>→</span> {label("Action")}
               </div>
             </div>
           </section>
 
           {error && (
             <div className="alert error-alert" role="alert">
-              <strong>Action needs attention</strong>
-              <span>{error}</span>
-              <button aria-label="Dismiss error" onClick={() => setError(null)}>
+              <strong>{label("Action needs attention")}</strong>
+              <span>{label(error)}</span>
+              <button
+                aria-label={label("Dismiss error")}
+                onClick={() => setError(null)}
+              >
                 <Icon name="close" size={16} />
               </button>
             </div>
           )}
+          {health === "offline" && !error && (
+            <div className="alert action-alert" role="status">
+              <span>
+                {label("API is unavailable. Check the local server and retry.")}
+              </span>
+              <button className="retry-link" onClick={() => void checkHealth()}>
+                {label("Retry")}
+              </button>
+            </div>
+          )}
 
-          <section className="dataset-strip" aria-label="Bundled dataset">
+          <section
+            className="dataset-strip"
+            aria-label={label("Bundled dataset")}
+          >
             <div className="strip-intro">
               <span className="strip-icon">
                 <Icon name="network" size={19} />
               </span>
               <div>
-                <strong>Bundled transaction network</strong>
-                <span>July 1–31, 2026 · four-hop sample</span>
+                <strong>{label("Bundled transaction network")}</strong>
+                <span>{label("July 1–31, 2026 · four-hop sample")}</span>
               </div>
             </div>
             <div className="strip-stat">
               <strong>2,248</strong>
-              <span>clients</span>
+              <span>{label("clients")}</span>
             </div>
             <div className="strip-stat">
               <strong>3,119</strong>
-              <span>directed edges</span>
+              <span>{label("directed edges")}</span>
             </div>
             <div className="strip-stat">
               <strong>4,840</strong>
-              <span>transactions</span>
+              <span>{label("transactions")}</span>
             </div>
             <div className="strip-stat">
               <strong>81</strong>
-              <span>seed clients</span>
+              <span>{label("seed clients")}</span>
             </div>
           </section>
 
           {run?.warnings.length ? (
             <div className="run-warnings">
-              <strong>Data limitations recorded</strong>
+              <strong>{label("Data limitations recorded")}</strong>
               <ul>
                 {run.warnings.map((warning, index) => (
-                  <li key={`${index}-${warning}`}>{warning}</li>
+                  <li key={`${index}-${warning}`}>{label(warning)}</li>
                 ))}
               </ul>
             </div>
           ) : null}
           {run?.result?.status === "needs_user_action" && (
             <div className="alert action-alert" role="status">
-              <strong>Run needs input</strong>
-              <span>{run.result.recommended_next_step}</span>
+              <strong>{label("Run needs input")}</strong>
+              <span>{label(run.result.recommended_next_step)}</span>
             </div>
           )}
 
           <section className="section-block" id="workflow">
             <div className="section-heading">
               <div>
-                <span className="section-kicker">01 / EXECUTION</span>
-                <h2>Run workflow</h2>
+                <span className="section-kicker">
+                  01 / {label("Execution")}
+                </span>
+                <h2>{label("Run workflow")}</h2>
                 <p>
-                  One run validates the data, computes evidence, creates a case,
-                  and checks every export.
+                  {label(
+                    "One run validates the data, computes evidence, creates a case, and checks every export.",
+                  )}
                 </p>
               </div>
               {run && (
@@ -634,7 +712,7 @@ export default function App() {
                   className={`status-badge ${completed ? "success" : ended ? "danger" : "running"}`}
                 >
                   {!ended && <span className="pulse-dot" />}
-                  {prettyStatus(run.status)}
+                  {pretty(run.status)}
                 </span>
               )}
             </div>
@@ -642,15 +720,17 @@ export default function App() {
               <div className="workflow-card">
                 <div className="card-title-row">
                   <div>
-                    <span className="small-label">ANALYSIS PIPELINE</span>
+                    <span className="small-label">
+                      {label("Analysis pipeline")}
+                    </span>
                     <h3>
                       {!run
-                        ? "Ready to analyze"
+                        ? label("Ready to analyze")
                         : completed
-                          ? "Verified run complete"
+                          ? label("Verified run complete")
                           : ended
-                            ? "Run stopped"
-                            : "Analysis in progress"}
+                            ? label("Run stopped")
+                            : label("Analysis in progress")}
                     </h3>
                   </div>
                   {!ended && run && <Spinner />}
@@ -680,13 +760,13 @@ export default function App() {
                           )}
                         </div>
                         <div>
-                          <strong>{step.label}</strong>
+                          <strong>{label(step.label)}</strong>
                           <span>
                             {done
-                              ? "Completed"
+                              ? label("Completed")
                               : current
-                                ? "In progress"
-                                : "Waiting"}
+                                ? label("In progress")
+                                : label("Waiting")}
                           </span>
                         </div>
                       </div>
@@ -696,32 +776,39 @@ export default function App() {
                 <div className="run-foot">
                   {run ? (
                     <>
-                      Run <code>{run.run_id}</code>
+                      {label("Run")} <code>{run.run_id}</code>
                     </>
                   ) : (
-                    "Start the bundled demo to create a real run."
+                    label("Start the bundled demo to create a real run.")
                   )}
                 </div>
               </div>
               <div className="trace-card">
                 <div className="card-title-row">
                   <div>
-                    <span className="small-label">SAFE EXECUTION TRACE</span>
-                    <h3>What the agent did</h3>
+                    <span className="small-label">
+                      {label("Safe execution trace")}
+                    </span>
+                    <h3>{label("What the agent did")}</h3>
                   </div>
                   <span className="live-indicator">
                     <span />
-                    {ended ? "FINISHED" : run ? "LIVE" : "IDLE"}
+                    {ended
+                      ? label("Finished")
+                      : run
+                        ? label("Live")
+                        : label("Idle")}
                   </span>
                 </div>
                 <div className="trace-list" aria-live="polite">
                   {events.length === 0 ? (
                     <div className="empty-trace">
                       <Icon name="spark" size={26} />
-                      <strong>No events yet</strong>
+                      <strong>{label("No events yet")}</strong>
                       <span>
-                        Tool activity and verification will appear here when a
-                        run starts.
+                        {label(
+                          "Tool activity and verification will appear here when a run starts.",
+                        )}
                       </span>
                     </div>
                   ) : (
@@ -738,12 +825,17 @@ export default function App() {
                               : "✓"}
                         </span>
                         <div>
-                          <strong>{event.summary}</strong>
+                          <strong>
+                            {translateTrace(event.summary, language)}
+                          </strong>
                           <span>
                             {event.tool_name
-                              ? prettyStatus(event.tool_name)
-                              : prettyStatus(event.kind)}{" "}
-                            · {new Date(event.created_at).toLocaleTimeString()}
+                              ? pretty(event.tool_name)
+                              : pretty(event.kind)}{" "}
+                            ·{" "}
+                            {new Date(event.created_at).toLocaleTimeString(
+                              locale[language],
+                            )}
                           </span>
                         </div>
                       </div>
@@ -752,8 +844,9 @@ export default function App() {
                 </div>
                 {traceInterrupted && !ended && (
                   <div className="trace-footnote">
-                    Live trace disconnected. Status still refreshes
-                    automatically.
+                    {label(
+                      "Live trace disconnected. Status still refreshes automatically.",
+                    )}
                   </div>
                 )}
               </div>
@@ -763,17 +856,20 @@ export default function App() {
           <section className="section-block" id="targets">
             <div className="section-heading">
               <div>
-                <span className="section-kicker">02 / PRIORITIES</span>
-                <h2>Review targets</h2>
+                <span className="section-kicker">
+                  02 / {label("Priorities")}
+                </span>
+                <h2>{label("Review targets")}</h2>
                 <p>
-                  Deterministic ranking with concrete evidence and explicit
-                  uncertainty.
+                  {label(
+                    "Deterministic ranking with concrete evidence and explicit uncertainty.",
+                  )}
                 </p>
               </div>
               <span className="section-count">
                 {targets.length
-                  ? `${targets.length} TARGETS`
-                  : "AWAITING RANKING"}
+                  ? `${targets.length} ${label("targets")}`
+                  : label("Awaiting ranking")}
               </span>
             </div>
             <div className="table-card">
@@ -781,12 +877,12 @@ export default function App() {
                 <table>
                   <thead>
                     <tr>
-                      <th>RANK</th>
-                      <th>CLIENT GID</th>
-                      <th>ROLE</th>
-                      <th>PRIORITY</th>
-                      <th>EVIDENCE &amp; WARNINGS</th>
-                      <th aria-label="Details" />
+                      <th>{label("Rank")}</th>
+                      <th>{label("Client GID")}</th>
+                      <th>{label("Role")}</th>
+                      <th>{label("Priority")}</th>
+                      <th>{label("Evidence & warnings")}</th>
+                      <th aria-label={label("Details")} />
                     </tr>
                   </thead>
                   <tbody>
@@ -805,7 +901,7 @@ export default function App() {
                         </td>
                         <td>
                           <span className={`role-pill role-${target.role}`}>
-                            {prettyStatus(target.role)}
+                            {pretty(target.role)}
                           </span>
                         </td>
                         <td>
@@ -822,18 +918,18 @@ export default function App() {
                         </td>
                         <td>
                           <span className="evidence-text">
-                            {target.evidence}
+                            {translateEvidence(target.evidence, language)}
                           </span>
                           {target.uncertainty_flags?.length > 0 && (
                             <span className="warning-text">
-                              {target.uncertainty_flags.join(" · ")}
+                              {target.uncertainty_flags.map(pretty).join(" · ")}
                             </span>
                           )}
                         </td>
                         <td>
                           <button
                             className="row-action"
-                            aria-label={`View client ${target.gid}`}
+                            aria-label={`${label("View client")} ${target.gid}`}
                             onClick={(event) => {
                               event.stopPropagation();
                               selectNode(target.gid);
@@ -849,13 +945,15 @@ export default function App() {
               </div>
               {targets.length === 0 && (
                 <div className="table-empty">
-                  The priority queue appears after independent verification
-                  passes.
+                  {label(
+                    "The priority queue appears after independent verification passes.",
+                  )}
                 </div>
               )}
               <div className="table-footnote">
-                Priority and role scores measure rule strength. They are not
-                probabilities of criminal activity.
+                {label(
+                  "Priority and role scores measure rule strength. They are not probabilities of criminal activity.",
+                )}
               </div>
             </div>
           </section>
@@ -863,10 +961,12 @@ export default function App() {
           <section className="section-block" id="network">
             <div className="section-heading">
               <div>
-                <span className="section-kicker">03 / EXPLORE</span>
-                <h2>Network explorer</h2>
+                <span className="section-kicker">03 / {label("Explore")}</span>
+                <h2>{label("Network explorer")}</h2>
                 <p>
-                  Focus on a cluster, then inspect a bounded directed ego graph.
+                  {label(
+                    "Focus on a cluster, then inspect a bounded directed ego graph.",
+                  )}
                 </p>
               </div>
             </div>
@@ -874,18 +974,23 @@ export default function App() {
               <div className="clusters-card">
                 <div className="card-title-row">
                   <div>
-                    <span className="small-label">COMMUNITY OVERVIEW</span>
-                    <h3>Clusters</h3>
+                    <span className="small-label">
+                      {label("Community overview")}
+                    </span>
+                    <h3>{label("Clusters")}</h3>
                   </div>
                   <span className="muted-count">
-                    {clusters.length ? `${clusters.length} shown` : "Pending"}
+                    {clusters.length
+                      ? `${clusters.length} ${label("shown")}`
+                      : label("Pending")}
                   </span>
                 </div>
                 <div className="cluster-list">
                   {clusters.length === 0 ? (
                     <p className="empty-copy">
-                      Cluster summaries appear after independent verification
-                      passes.
+                      {label(
+                        "Cluster summaries appear after independent verification passes.",
+                      )}
                     </p>
                   ) : (
                     clusters.map((cluster) => (
@@ -898,9 +1003,12 @@ export default function App() {
                           {String(cluster.cluster_id).padStart(2, "0")}
                         </span>
                         <span>
-                          <strong>Cluster {cluster.cluster_id}</strong>
+                          <strong>
+                            {label("Cluster")} {cluster.cluster_id}
+                          </strong>
                           <small>
-                            {cluster.n_nodes} clients · {cluster.n_seed} seeds
+                            {cluster.n_nodes} {label("clients")} ·{" "}
+                            {cluster.n_seed} {label("seeds")}
                           </small>
                         </span>
                         <Icon name="arrow" size={15} />
@@ -910,12 +1018,14 @@ export default function App() {
                 </div>
                 {selectedCluster && (
                   <div className="cluster-summary">
-                    <span className="small-label">SELECTED CLUSTER</span>
-                    <p>{selectedCluster.hypothesis}</p>
+                    <span className="small-label">
+                      {label("Selected cluster")}
+                    </span>
+                    <p>{label(selectedCluster.hypothesis)}</p>
                     <div className="cluster-metric">
-                      <span>Internal turnover</span>
+                      <span>{label("Internal turnover")}</span>
                       <strong>
-                        {formatKzt(selectedCluster.sum_kzt_internal)}
+                        {formatKzt(selectedCluster.sum_kzt_internal, language)}
                       </strong>
                     </div>
                     <div className="cluster-gids">
@@ -932,26 +1042,31 @@ export default function App() {
               <div className="network-card">
                 <div className="card-title-row">
                   <div>
-                    <span className="small-label">DIRECTED EGO GRAPH</span>
+                    <span className="small-label">
+                      {label("Directed ego graph")}
+                    </span>
                     <h3>
                       {selectedGid
-                        ? `Client ${selectedGid}`
-                        : "Select a client"}
+                        ? `${label("Client")} ${selectedGid}`
+                        : label("Select a client")}
                     </h3>
                   </div>
                   {selectedGid && (
-                    <div className="radius-toggle" aria-label="Graph radius">
+                    <div
+                      className="radius-toggle"
+                      aria-label={label("Graph radius")}
+                    >
                       <button
                         className={radius === 1 ? "selected" : ""}
                         onClick={() => setRadius(1)}
                       >
-                        1 hop
+                        1 {label("hop")}
                       </button>
                       <button
                         className={radius === 2 ? "selected" : ""}
                         onClick={() => setRadius(2)}
                       >
-                        2 hops
+                        2 {label("hops")}
                       </button>
                     </div>
                   )}
@@ -959,36 +1074,42 @@ export default function App() {
                 <form className="search-form" onSubmit={search}>
                   <Icon name="search" size={18} />
                   <input
-                    aria-label="Search full client GID"
+                    aria-label={label("Search full client GID")}
                     inputMode="numeric"
-                    placeholder="Search full client GID"
+                    placeholder={label("Search full client GID")}
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                   />
-                  <button type="submit">Search</button>
+                  <button type="submit">{label("Search")}</button>
                 </form>
-                {queryError && <p className="field-error">{queryError}</p>}
-                {nodeError && <p className="field-error">{nodeError}</p>}
+                {queryError && (
+                  <p className="field-error">{label(queryError)}</p>
+                )}
+                {nodeError && <p className="field-error">{label(nodeError)}</p>}
                 {nodeDetail ? (
                   <>
                     <Suspense
                       fallback={
-                        <div className="graph-placeholder">Loading graph…</div>
+                        <div className="graph-placeholder">
+                          {label("Loading graph…")}
+                        </div>
                       }
                     >
                       <GraphView
                         graph={nodeDetail.ego_graph}
                         focusGid={nodeDetail.gid}
                         onSelect={selectNode}
+                        language={language}
                       />
                     </Suspense>
                     <div className="graph-foot">
                       <span>
-                        Arrows follow transfer direction · Click a node for
-                        detail
+                        {label(
+                          "Arrows follow transfer direction · Click a node for detail",
+                        )}
                       </span>
                       {nodeDetail.ego_graph.truncated && (
-                        <strong>View bounded by server</strong>
+                        <strong>{label("View bounded by server")}</strong>
                       )}
                     </div>
                   </>
@@ -999,12 +1120,13 @@ export default function App() {
                     </div>
                     <strong>
                       {selectedGid
-                        ? "Loading network slice…"
-                        : "A focused view of the network"}
+                        ? label("Loading network slice…")
+                        : label("A focused view of the network")}
                     </strong>
                     <span>
-                      Select a ranked target, a cluster GID, or search by full
-                      identifier.
+                      {label(
+                        "Select a ranked target, a cluster GID, or search by full identifier.",
+                      )}
                     </span>
                   </div>
                 )}
@@ -1015,11 +1137,12 @@ export default function App() {
           <section className="section-block" id="case">
             <div className="section-heading">
               <div>
-                <span className="section-kicker">04 / OUTCOME</span>
-                <h2>From signal to action</h2>
+                <span className="section-kicker">04 / {label("Outcome")}</span>
+                <h2>{label("From signal to action")}</h2>
                 <p>
-                  The agent creates a local review case, then independently
-                  verifies the output bundle.
+                  {label(
+                    "The agent creates a local review case, then independently verifies the output bundle.",
+                  )}
                 </p>
               </div>
               <span
@@ -1027,39 +1150,46 @@ export default function App() {
               >
                 <Icon name="shield" size={16} />
                 {completed
-                  ? "VERIFIED"
+                  ? label("Verified")
                   : run?.verification_status === "failed"
-                    ? "VERIFICATION FAILED"
-                    : "AWAITING VERIFICATION"}
+                    ? label("Verification failed")
+                    : label("Awaiting verification")}
               </span>
             </div>
             <div className="outcome-layout">
               <div className="case-card before">
-                <span className="case-step">BEFORE</span>
-                <h3>Unreviewed transfer graph</h3>
+                <span className="case-step">{label("Before")}</span>
+                <h3>{label("Unreviewed transfer graph")}</h3>
                 <p>
-                  Thousands of clients and transfers, without an ordered analyst
-                  queue or case record.
+                  {label(
+                    "Thousands of clients and transfers, without an ordered analyst queue or case record.",
+                  )}
                 </p>
                 <div className="case-visual">
-                  <span>2,248 clients</span>
+                  <span>2,248 {label("clients")}</span>
                   <Icon name="arrow" size={22} />
-                  <span>Needs triage</span>
+                  <span>{label("Needs triage")}</span>
                 </div>
               </div>
               <div className={`case-card after ${reviewCase ? "active" : ""}`}>
-                <span className="case-step">AFTER</span>
-                <h3>{reviewCase ? reviewCase.title : "Review case pending"}</h3>
+                <span className="case-step">{label("After")}</span>
+                <h3>
+                  {reviewCase
+                    ? label(reviewCase.title)
+                    : label("Review case pending")}
+                </h3>
                 <p>
                   {reviewCase
-                    ? `${reviewCase.target_gids.length} ranked clients captured for analyst review.`
-                    : "A local case is created from the ranked target snapshot."}
+                    ? `${reviewCase.target_gids.length} ${label("ranked clients captured for analyst review.")}`
+                    : label(
+                        "A local case is created from the ranked target snapshot.",
+                      )}
                 </p>
                 <div className="case-visual">
                   <span>
                     {reviewCase
-                      ? prettyStatus(reviewCase.status)
-                      : "No case yet"}
+                      ? pretty(reviewCase.status)
+                      : label("No case yet")}
                   </span>
                   <span className="case-id">
                     {reviewCase ? `ID ${reviewCase.case_id.slice(0, 8)}` : "—"}
@@ -1069,11 +1199,14 @@ export default function App() {
             </div>
             <div className="download-card">
               <div>
-                <span className="small-label">VERIFIED EXPORT BUNDLE</span>
-                <h3>Evidence you can inspect</h3>
+                <span className="small-label">
+                  {label("Verified export bundle")}
+                </span>
+                <h3>{label("Evidence you can inspect")}</h3>
                 <p>
-                  Downloads unlock only when the run completes with passed
-                  verification.
+                  {label(
+                    "Downloads unlock only when the run completes with passed verification.",
+                  )}
                 </p>
               </div>
               <div className="download-list">
@@ -1086,16 +1219,16 @@ export default function App() {
                       download={artifact.name}
                     >
                       <span>
-                        <strong>{artifact.label}</strong>
-                        <small>{artifact.description}</small>
+                        <strong>{label(artifact.label)}</strong>
+                        <small>{label(artifact.description)}</small>
                       </span>
                       <Icon name="download" size={18} />
                     </a>
                   ) : (
                     <div className="download-link disabled" key={artifact.name}>
                       <span>
-                        <strong>{artifact.label}</strong>
-                        <small>{artifact.description}</small>
+                        <strong>{label(artifact.label)}</strong>
+                        <small>{label(artifact.description)}</small>
                       </span>
                       <Icon name="download" size={18} />
                     </div>
@@ -1105,8 +1238,9 @@ export default function App() {
             </div>
           </section>
           <footer>
-            AML Agent · Analyst decision support · All actions stay local to the
-            review workspace.
+            {label(
+              "AML Agent · Analyst decision support · All actions stay local to the review workspace.",
+            )}
           </footer>
         </div>
       </main>
@@ -1117,13 +1251,13 @@ export default function App() {
             className="detail-drawer"
             role="dialog"
             aria-modal="true"
-            aria-label={`Client ${selectedGid} detail`}
+            aria-label={`${label("Client")} ${selectedGid} ${label("detail")}`}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="drawer-head">
-              <span className="section-kicker">CLIENT EVIDENCE</span>
+              <span className="section-kicker">{label("Client evidence")}</span>
               <button
-                aria-label="Close client detail"
+                aria-label={label("Close client detail")}
                 onClick={() => setSelectedGid(null)}
               >
                 <Icon name="close" size={19} />
@@ -1134,85 +1268,89 @@ export default function App() {
                 <h2>{nodeDetail.gid}</h2>
                 <div className="drawer-badges">
                   <span className={`role-pill role-${nodeDetail.role}`}>
-                    {prettyStatus(nodeDetail.role)}
+                    {pretty(nodeDetail.role)}
                   </span>
                   {nodeDetail.is_seed && (
-                    <span className="tag">Seed client</span>
+                    <span className="tag">{label("Seed client")}</span>
                   )}
                 </div>
                 <div className="drawer-score">
                   <div>
-                    <span>Priority score</span>
+                    <span>{label("Priority score")}</span>
                     <strong>{formatScore(nodeDetail.priority_score)}</strong>
                   </div>
                   <div>
-                    <span>Role match</span>
+                    <span>{label("Role match")}</span>
                     <strong>{formatScore(nodeDetail.role_score)}</strong>
                   </div>
                 </div>
                 <div className="drawer-section">
-                  <span className="small-label">RULE EVIDENCE</span>
-                  <p>{nodeDetail.evidence}</p>
+                  <span className="small-label">{label("Rule evidence")}</span>
+                  <p>{translateEvidence(nodeDetail.evidence, language)}</p>
                 </div>
                 <div className="drawer-section">
-                  <span className="small-label">OBSERVED NETWORK</span>
+                  <span className="small-label">
+                    {label("Observed network")}
+                  </span>
                   <dl className="metric-grid">
                     <div>
-                      <dt>In degree</dt>
+                      <dt>{label("In degree")}</dt>
                       <dd>{nodeDetail.in_degree}</dd>
                     </div>
                     <div>
-                      <dt>Out degree</dt>
+                      <dt>{label("Out degree")}</dt>
                       <dd>{nodeDetail.out_degree}</dd>
                     </div>
                     <div>
-                      <dt>Incoming</dt>
-                      <dd>{formatKzt(nodeDetail.in_kzt)}</dd>
+                      <dt>{label("Incoming")}</dt>
+                      <dd>{formatKzt(nodeDetail.in_kzt, language)}</dd>
                     </div>
                     <div>
-                      <dt>Outgoing</dt>
-                      <dd>{formatKzt(nodeDetail.out_kzt)}</dd>
+                      <dt>{label("Outgoing")}</dt>
+                      <dd>{formatKzt(nodeDetail.out_kzt, language)}</dd>
                     </div>
                     <div>
-                      <dt>Cluster</dt>
+                      <dt>{label("Cluster")}</dt>
                       <dd>{nodeDetail.cluster_id}</dd>
                     </div>
                     <div>
-                      <dt>Depth</dt>
+                      <dt>{label("Depth")}</dt>
                       <dd>{nodeDetail.depth}</dd>
                     </div>
                   </dl>
                 </div>
                 <div className="drawer-section">
-                  <span className="small-label">UNCERTAINTY</span>
+                  <span className="small-label">{label("Uncertainty")}</span>
                   {nodeDetail.uncertainty_flags.length ? (
                     <ul className="uncertainty-list">
                       {nodeDetail.uncertainty_flags.map((flag) => (
-                        <li key={flag}>{prettyStatus(flag)}</li>
+                        <li key={flag}>{pretty(flag)}</li>
                       ))}
                     </ul>
                   ) : (
-                    <p>No node-specific flags recorded.</p>
+                    <p>{label("No node-specific flags recorded.")}</p>
                   )}
                   {nodeDetail.truncated_by_depth && (
                     <p className="boundary-note">
-                      At the depth boundary, missing outgoing transfers do not
-                      establish a terminal role.
+                      {label(
+                        "At the depth boundary, missing outgoing transfers do not establish a terminal role.",
+                      )}
                     </p>
                   )}
                 </div>
                 <p className="drawer-disclaimer">
-                  This assessment supports analyst review and is not a finding
-                  of wrongdoing.
+                  {label(
+                    "This assessment supports analyst review and is not a finding of wrongdoing.",
+                  )}
                 </p>
               </>
             ) : (
               <div className="drawer-loading">
                 {nodeError ? (
-                  nodeError
+                  label(nodeError)
                 ) : (
                   <>
-                    Loading client evidence… <Spinner />
+                    {label("Loading client evidence…")} <Spinner />
                   </>
                 )}
               </div>
