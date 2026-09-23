@@ -359,4 +359,113 @@ describe("bundled demo workflow", () => {
     expect(screen.getByRole("heading", { name: "Run workflow" })).toBeTruthy();
     expect(screen.queryByText("API connected")).toBeNull();
   });
+
+  it("moves the highlight with manual scrolling, including the page bottom", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json({
+          status: "ok",
+          mode: "demo",
+          backend_ready: true,
+          live_configured: false,
+        }),
+      ),
+    );
+    const scrollHeightDescriptor = Object.getOwnPropertyDescriptor(
+      document.documentElement,
+      "scrollHeight",
+    );
+    const scrollYDescriptor = Object.getOwnPropertyDescriptor(
+      window,
+      "scrollY",
+    );
+    const tops = { workflow: 900, targets: 1700, network: 2600, case: 3600 };
+    const ids = Object.keys(tops) as (keyof typeof tops)[];
+    render(<App />);
+    const spies = ids.map((id) =>
+      vi
+        .spyOn(document.getElementById(id)!, "getBoundingClientRect")
+        .mockImplementation(
+          () =>
+            ({
+              top: tops[id],
+              bottom: tops[id] + 600,
+              height: 600,
+              left: 0,
+              right: 600,
+              width: 600,
+              x: 0,
+              y: tops[id],
+              toJSON: () => ({}),
+            }) as DOMRect,
+        ),
+    );
+    Object.defineProperty(document.documentElement, "scrollHeight", {
+      configurable: true,
+      value: 5000,
+    });
+    Object.defineProperty(window, "scrollY", {
+      configurable: true,
+      writable: true,
+      value: 0,
+    });
+
+    try {
+      const [sidebar, mobile] = screen.getAllByRole("navigation", {
+        name: "Workspace sections",
+      });
+      const selected = (navigation: HTMLElement) =>
+        within(navigation)
+          .getAllByRole("link")
+          .find((link) => link.getAttribute("aria-current") === "location")
+          ?.getAttribute("href");
+      expect(selected(sidebar)).toBe("#overview");
+
+      fireEvent.click(
+        within(sidebar).getByRole("link", { name: "Run workflow" }),
+      );
+      expect(selected(sidebar)).toBe("#workflow");
+      fireEvent.wheel(window);
+      tops.workflow = 120;
+      fireEvent.scroll(window);
+      expect(selected(sidebar)).toBe("#workflow");
+
+      tops.workflow = -1500;
+      tops.targets = -700;
+      tops.network = 130;
+      fireEvent.scroll(window);
+      expect(selected(sidebar)).toBe("#network");
+      expect(selected(mobile)).toBe("#network");
+
+      window.scrollY = 4300;
+      fireEvent.scroll(window);
+      expect(selected(sidebar)).toBe("#case");
+      expect(selected(mobile)).toBe("#case");
+
+      window.scrollY = 1800;
+      tops.workflow = -900;
+      tops.targets = 140;
+      tops.network = 900;
+      tops.case = 1800;
+      fireEvent.scroll(window);
+      expect(selected(sidebar)).toBe("#targets");
+    } finally {
+      spies.forEach((spy) => spy.mockRestore());
+      if (scrollHeightDescriptor) {
+        Object.defineProperty(
+          document.documentElement,
+          "scrollHeight",
+          scrollHeightDescriptor,
+        );
+      } else {
+        Reflect.deleteProperty(document.documentElement, "scrollHeight");
+      }
+      if (scrollYDescriptor) {
+        Object.defineProperty(window, "scrollY", scrollYDescriptor);
+      } else {
+        Reflect.deleteProperty(window, "scrollY");
+      }
+    }
+  });
 });
