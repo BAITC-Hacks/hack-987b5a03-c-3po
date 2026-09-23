@@ -2,7 +2,35 @@
 
 AML Agent turns an anonymized bank-transfer graph into an explainable investigation queue for an AML analyst. It validates the batch, computes deterministic graph evidence, assigns roles, ranks targets, creates a local review case, and verifies the resulting artifacts.
 
-> Current status: architecture and starter baseline are committed. The production pipeline, API, agent orchestrator, and UI are the next implementation stages tracked in [TODO.md](TODO.md).
+> Current status: the Phase 4 FastAPI HTTP layer, validated settings, SSE, bounded queries, and API contract tests are implemented. Phases 1–3 are being developed separately; their storage and orchestrator must still be connected. The default API starts with `backend_ready=false` and returns `503` for run operations. It does not simulate a successful analytical run. See [TODO.md](TODO.md) and the [HTTP/integration contract](docs/API.md).
+
+## Run the Phase 4 API
+
+From the repository root, with Python 3.12+:
+
+```bash
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
+python -m pip install -r backend/requirements-api.txt
+python -m uvicorn backend.app.main:create_app --factory --host 127.0.0.1 --port 8000 --workers 1
+```
+
+Open [interactive API documentation](http://127.0.0.1:8000/docs) or [health](http://127.0.0.1:8000/health).
+`/health` distinguishes the running HTTP service from whether a backend adapter is connected.
+No API key is needed to start the API or run its contract tests.
+
+```bash
+python -m pip install -r backend/requirements-api-dev.txt
+python -m pytest backend/tests/api -q
+python -m ruff check backend/app/api backend/app/config.py backend/app/main.py backend/tests/api
+```
+
+These tests use fixtures confined to `backend/tests/api/`. They verify the HTTP
+workflow and failure handling, not the analytical correctness or completion of
+Phases 1–3. The full bundled-data HTTP integration run remains a follow-up after
+those phases land. Dependencies are pinned separately so Phase 4 does not replace
+the analytical backend's dependency files. Validated locally on Python 3.14.2.
 
 ## Problem
 
@@ -63,6 +91,7 @@ Detailed design:
 - [Analytical rules](docs/ANALYTICS.md)
 - [Tool contracts](docs/TOOLS.md)
 - [Agent loop](docs/AGENT_LOOP.md)
+- [HTTP API and Phase 1–3 integration](docs/API.md)
 - [Implementation checklist](TODO.md)
 
 ## OpenAI configuration
@@ -124,6 +153,14 @@ The starter intentionally leaves role assignment, clustering, ranking, and visua
 .
 |-- AGENTS.md
 |-- TODO.md
+|-- backend/
+|   |-- app/
+|   |   |-- api/           # HTTP routes, DTOs, SSE, query/execution service, integration ports
+|   |   |-- config.py
+|   |   `-- main.py        # ASGI factory
+|   |-- tests/api/         # HTTP contract tests with explicit test doubles
+|   |-- requirements-api.txt
+|   `-- requirements-api-dev.txt
 |-- data/
 |   |-- README.md
 |   |-- edges.parquet

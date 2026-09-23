@@ -108,6 +108,11 @@ docs/
 
 ## 7. API surface
 
+The Phase 4 HTTP layer implements this surface. Its current integration boundary,
+settings, request/response semantics, and pending Phase 1–3 wiring are documented
+in [API.md](API.md). Until real backend/executor adapters are supplied to
+`create_app`, health reports `backend_ready=false` and run operations return 503.
+
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/health` | Container health and mode, without secrets |

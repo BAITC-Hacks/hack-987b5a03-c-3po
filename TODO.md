@@ -61,12 +61,20 @@ Exit criterion: demo and live providers drive the same tools and reach the same 
 
 ## Phase 4 — FastAPI golden path, P0
 
-- [ ] Add settings validation and `/health`.
-- [ ] Add run create, execute, status, event-stream, node, cluster, case, and artifact endpoints.
-- [ ] Serialize every API GID as a string.
-- [ ] Add SSE event streaming.
-- [ ] Add pagination and bounded ego-graph queries.
-- [ ] Add API integration tests for the golden path.
+- [x] Add settings validation and `/health`.
+- [x] Add run create, execute, status, event-stream, node, cluster, case, and artifact endpoints.
+- [x] Serialize every API GID as a string.
+- [x] Add SSE event streaming.
+- [x] Add pagination and bounded ego-graph queries.
+- [x] Add API integration tests for the golden path (HTTP contract with explicit test doubles).
+
+Phase 4 HTTP implementation is available independently of Phases 1–3. Until their
+backend/executor adapters are connected, `/health` reports `backend_ready=false`
+and run endpoints return `503 BACKEND_NOT_CONFIGURED`. No test fixture is used as
+the product's demo provider. Integration contract and commands: [docs/API.md](docs/API.md).
+
+- [ ] Follow-up after Phases 1–3 land: wire the real adapters and run the bundled-data
+      HTTP golden path (2,248 nodes, top 20, persisted case, CSVs, passed verification).
 
 Exit criterion: the full workflow can be driven only through documented HTTP endpoints.
 
