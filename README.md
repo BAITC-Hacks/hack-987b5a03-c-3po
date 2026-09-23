@@ -37,6 +37,8 @@ python -m uvicorn backend.app.main:create_app --factory --host 127.0.0.1 --port 
 
 Windows PowerShell, без активации окружения:
 
+Если установлен Python новее 3.12, замените `-3.12` ниже на его версию.
+
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r backend\requirements.lock
@@ -58,7 +60,7 @@ npm ci
 npm run dev
 ```
 
-Откройте <http://127.0.0.1:5173> и нажмите **Start bundled demo**. Интерфейс покажет безопасные события выполнения, затем проверенные top-20, кластеры, направленный граф на 1–2 перехода, review case и скачиваемые артефакты. Кнопка **Reset demo** доступна после завершения run. Подробнее: [frontend/README.md](frontend/README.md).
+Откройте <http://127.0.0.1:5173> и нажмите **Start bundled demo**. Интерфейс покажет безопасный execution trace, затем проверенные top-20, кластеры, направленный 1–2-hop ego graph, локальный review case и скачиваемые файлы. **Reset demo** доступен после завершения run. Подробности: [frontend/README.md](frontend/README.md).
 
 ```bash
 python -m pip install -r backend/requirements-api-dev.txt
@@ -66,7 +68,7 @@ python -m pytest backend/tests/api -q
 python -m ruff check backend/app/api backend/app/config.py backend/app/main.py backend/tests/api
 ```
 
-Тесты `backend/tests/api/` проверяют HTTP-контракт и полный golden path на настоящем backend. Зависимости HTTP зафиксированы отдельно от `backend/requirements.lock`. Для полного набора установите также `backend/requirements-api-dev.txt`, затем запустите `python -m pytest backend/tests -q` в активированном окружении (Windows без активации: `.\.venv\Scripts\python.exe -X utf8 -m pytest backend\tests -q`).
+Тесты `backend/tests/api/` проверяют HTTP-контракт и полный golden path на настоящем backend. Зависимости HTTP зафиксированы отдельно от `backend/requirements.lock`. Для полного набора установите также `backend/requirements-api-dev.txt`, затем запустите `python -m pytest backend/tests -q` в активированном окружении (Windows без активации: `.\.venv\Scripts\python.exe -m pytest backend\tests -q`).
 
 ## Проблема
 
@@ -121,7 +123,7 @@ python3.12 -m venv .venv
 .venv/bin/aml-agent-run --mode demo --data data --database var/agent.sqlite3 --artifacts artifacts
 ```
 
-Успешный agent run возвращает `status: completed`; сохранённый run имеет `verification_status: passed`, а результаты всех девяти tools содержат `ok: true`. Каждый запуск создаёт новую запись run.
+Успешный `aml-agent-run` печатает конечное решение со `status: completed` и `case_id`. Сохранённый run имеет `verification_status: passed`; команда `aml-agent-tools` дополнительно печатает результаты девяти обязательных tools с `ok: true`. Каждый запуск создаёт новую запись run.
 
 ## Датасет
 
@@ -135,24 +137,32 @@ python3.12 -m venv .venv
 
 Поля и ограничения сбора описаны в [data/README.md](data/README.md). Главное ограничение — граница обхода в четыре перехода: у 444 узлов с `depth=4` нет видимых исходящих переводов, поэтому их нельзя автоматически считать конечными получателями.
 
+## Критерии ролей
+
+Версия правил `v1` назначает каждому узлу одну роль в указанном порядке. `in_degree` и `out_degree` считают уникальных наблюдаемых контрагентов; `pass-through` равен наблюдаемому `out_kzt / in_kzt` и не применяется к seed-клиентам.
+
+| Роль | Условие |
+|---|---|
+| `coordinator` | Не seed, `depth < 4`, есть входящие и исходящие рёбра; достижимость от seed не ниже 90-го percentile, составной индекс координации не ниже 99-го percentile. |
+| `consolidator` | Не seed, `in_degree >= 5`, `pass-through < 0.5`. |
+| `distributor` | `out_degree >= 10` и `out_degree >= 2 × max(in_degree, 1)`. |
+| `transit` | Не seed, `depth < 4`, `in_degree >= 2`, `out_degree >= 1`, `0.8 <= pass-through <= 1.2`. |
+| `terminal` | Не seed, `depth < 4`, `out_degree = 0`, `in_degree >= 2`. |
+| `peripheral` | Остальные узлы, включая изолированные seed и узлы с недостаточным evidence на границе обхода. |
+
+`role_score` измеряет силу совпадения с правилом; `priority_score` задаёт порядок проверки аналитиком. Ни один из них не является вероятностью преступления. Кластеры строятся Louvain по ненаправленной проекции, но признаки ролей используют направленные переводы. Формулы scores, порядок разрешения равенств и шаблоны evidence приведены в [аналитическом ruleset](docs/ANALYTICS.md).
+
+## Ограничения данных
+
+- У 444 узлов на `depth=4` дальнейший outflow не наблюдался из-за границы обхода; они получают флаг неопределённости, а не автоматическую роль `terminal`.
+- Входящий поток seed-клиентов неполон, поэтому их pass-through нельзя надёжно оценить. Все 19 seed без рёбер всё равно включены в `nodes_roles.csv`.
+- Данные охватывают наблюдаемые переводы за июль 2026 года с порогом суммы от 5 000 KZT. Даты не содержат время, поэтому порядок переводов внутри дня неизвестен.
+- В наборе нет ФИО, ИИН, возраста, дохода или размеченной истины. Результаты служат гипотезами для проверки аналитиком.
+- GID хранится как `int64` в parquet/CSV, но передаётся как десятичная строка в API, JSON и аргументах tools: значения превышают безопасный диапазон JavaScript.
+
 ## Архитектура
 
-```text
-React / Vite UI [реализовано]
-       |
-       v
-FastAPI-приложение (фаза 4) ---- SQLite-хранилище run/case/audit [реализовано]
-       |
-       +---- Agent orchestrator [реализовано] ---- OpenAI Responses API
-       |              |
-       |              +---- строгие function tools [реализовано]
-       |
-       +---- Детерминированный analytics engine [реализовано]
-                     |
-                     +---- pandas / NetworkX / SciPy
-                     +---- parquet на входе
-                     +---- CSV- и JSON-артефакты
-```
+React UI получает результаты через FastAPI, который передаёт работу одному orchestrator с контролируемыми tools. Детерминированная аналитика рассчитывает роли и приоритеты; SQLite хранит run, events и case; локальные артефакты проверяются независимо перед выдачей. Диаграмма компонентов и сценарий показа находятся в [docs/JUDGING_DEMO.md](docs/JUDGING_DEMO.md).
 
 Подробная документация:
 
@@ -168,28 +178,24 @@ FastAPI-приложение (фаза 4) ---- SQLite-хранилище run/cas
 
 ## Настройка OpenAI
 
-Live orchestrator использует OpenAI Responses API с function calling и Structured Outputs. Модель задаётся через `OPENAI_MODEL` и не зашивается в аналитику или tools. Для `--mode live` установите дополнительные зависимости:
+Live orchestrator использует OpenAI Responses API с function calling и Structured Outputs. Модель задаётся через `OPENAI_MODEL`; analytics, роли и verification остаются детерминированными. Для live-режима после основной установки добавьте extra `backend[live]` (он включает официальный SDK), затем задайте ключ в окружении или игнорируемом корневом `.env`:
 
 ```bash
 .venv/bin/python -m pip install -e 'backend[live]'
-.venv/bin/aml-agent-run --mode live --data data --database var/live.sqlite3 --artifacts artifacts
 ```
 
-1. Скопируйте `.env.example` в `.env`, если локального файла ещё нет.
-2. Добавьте существующий ключ только в локальный игнорируемый файл:
+В Windows PowerShell используйте `.\.venv\Scripts\python.exe -m pip install -e 'backend[live]'`.
 
-   ```dotenv
-   OPENAI_API_KEY=your-existing-key
-   DEMO_MODE=false
-   ```
+```dotenv
+OPENAI_API_KEY=your-existing-key
+OPENAI_MODEL=gpt-5-mini
+```
 
-3. Запустите live-команду из корня репозитория, чтобы CLI загрузил игнорируемый `.env`. Никогда не добавляйте ключ в исходный код, логи или коммиты.
+Запускайте CLI из корня репозитория: `aml-agent-run --mode live --data data --database var/live.sqlite3 --artifacts artifacts`. В API создайте run с `{"dataset_id":"bundled","mode":"live"}`, затем вызовите `/execute`. На Windows используйте `.\.venv\Scripts\aml-agent-run.exe`; на macOS/Linux — `.venv/bin/aml-agent-run`. Ключ нельзя добавлять в исходный код, логи или коммиты.
 
-CLI по умолчанию запускается с `--mode demo`: графовая аналитика остаётся настоящей, заменяется только внешний model provider.
+CLI по умолчанию запускается с `--mode demo`. Настройка API `DEMO_MODE=true` также выбирает demo для новых runs без явного `mode` и разрешает локальный demo reset; `DEMO_MODE=false` меняет режим по умолчанию на live и отключает reset. Demo заменяет только model provider — аналитика, tools, case, экспорт и проверка остаются настоящими.
 
-Автоматические тесты используют имитацию транспорта Responses для проверки live-provider и не отправляют запросы в OpenAI API.
-
-Официальная документация: [function calling](https://developers.openai.com/api/docs/guides/function-calling), [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs) и [`gpt-5-mini`](https://developers.openai.com/api/docs/models/gpt-5-mini).
+Автоматические тесты live-provider используют имитацию транспорта Responses. Настоящий внешний запрос к OpenAI API ими не проверяется.
 
 ## Запуск стартового решения
 
@@ -215,21 +221,23 @@ Starter намеренно не реализует назначение роле
 
 `backend/aml_agent/agent/` содержит ограниченный цикл запуска, demo-provider, адаптер OpenAI Responses, строгую проверку вызовов tools и адаптеры к рабочим SQLite-аудиту и runtime tools. Demo-режим выполняет настоящую аналитику и создание case. Интеграционный тест сравнивает результаты demo- и live-provider на встроенных parquet-файлах; транспорт Responses в тесте имитируется.
 
-Запуск тестов:
+Запуск тестов после установки `backend/requirements-api-dev.txt`:
 
 ```bash
-PYTHONPATH=backend .venv/bin/python -m pytest backend/tests -q
+python -m pytest backend/tests -q
 ```
 
 Для live-режима требуются дополнительные зависимости `backend[live]` и `OPENAI_API_KEY` в окружении или игнорируемом `.env`.
 
-## Обязательные итоговые артефакты
+## Создаваемые артефакты
 
 - `nodes_roles.csv`: одна строка для каждого из 2 248 узлов;
 - `clusters.csv`: статистика кластеров и осторожная гипотеза;
 - `top_nodes.csv`: минимум 20 ранжированных целей для проверки;
-- браузерный UI с направлением графа, ролями, кластерами, поиском GID, execution trace и состоянием до/после;
-- запись аудита с хешем датасета, версией ruleset, событиями tools, предупреждениями и результатом проверки.
+- `audit.json`: хеш датасета, версия ruleset, события tools, предупреждения и результат проверки;
+- локальный review case в SQLite со snapshot top-20.
+
+Артефакты каждого run сохраняются в `artifacts/<run_id>/` и исключены из Git. Для получения проверенных файлов на своей машине запустите `aml-agent-tools` или demo в React UI; скачивание доступно только после `verification_status=passed`. Проверенные counts, SHA-256 и команда воспроизведения описаны в [docs/VERIFIED_EXPORTS.md](docs/VERIFIED_EXPORTS.md).
 
 ## Безопасность и объяснимость
 
@@ -238,7 +246,27 @@ PYTHONPATH=backend .venv/bin/python -m pytest backend/tests -q
 - Узел с `depth=4` без видимого исходящего ребра получает флаг `truncated_by_depth`, а не автоматически роль `terminal`.
 - `role_score` означает силу совпадения с правилом, а не вероятность преступной деятельности.
 - Каждая строка evidence должна ссылаться на рассчитанные значения и занимать не более 200 символов.
-- Внешние и разрушительные действия не входят в MVP. Единственное записывающее действие — создание локального review case и пакета экспорта.
+- Внешние и разрушительные действия не входят в MVP. Единственное действие для аналитика — создание локального review case и проверенного пакета экспорта; служебные run, events и audit также сохраняются локально.
+
+## Масштабирование и режим работы
+
+Проверенный масштаб встроенного датасета — 2 248 узлов, 3 119 рёбер и 4 840 транзакций. Pipeline использует pandas/NetworkX в памяти, SQLite и локальные файлы; HTTP API запускается с одним Uvicorn worker. API ограничивает размер страниц и ego graph, но чтение узлов после завершения run заново загружает проверенные CSV и исходный parquet и пересчитывает признаки. Это локальный однопользовательский MVP, без подтверждённой работы на графе в миллион узлов. Для большего масштаба потребуются другие реализации графового расчёта, хранения и bounded queries при сохранении контрактов API и tools.
+
+## Troubleshooting
+
+| Симптом | Что проверить |
+|---|---|
+| `/health` возвращает 503 | Наличие трёх файлов `data/*.parquet`, доступность локальной SQLite и запуск из корня репозитория. |
+| `409 OPENAI_KEY_REQUIRED` | Для demo выберите `mode=demo`. Для live установите `backend[live]` и настройте `OPENAI_API_KEY` локально. |
+| `409 INVALID_STATE` при запросе узлов или файлов | Дождитесь `status=completed` и `verification_status=passed` у run. |
+| `422` при запросе GID | Передайте канонический десятичный GID как строку, без JSON number или ведущих нулей. |
+| `409 RUN_BUSY` при demo reset | Дождитесь завершения активного run и закройте SSE-подключения. |
+| `503 EXECUTION_CAPACITY` или `STREAM_CAPACITY` | Повторите запрос после освобождения слота; для MVP оставьте один API worker. |
+| Run завершился `failed` или `verification_failed` | Посмотрите безопасные events и сохранённые предупреждения, исправьте причину и создайте новый run. |
+| UI на `:5173` не получает данные | Убедитесь, что FastAPI запущен на `127.0.0.1:8000`; Vite проксирует `/api` и `/health` на этот порт. |
+| `docker compose up --build` не проходит healthchecks | Проверьте, что Docker Engine запущен, а порты 8000 и 5173 свободны; `docker compose ps` покажет состояние сервисов. |
+
+Полный HTTP-контракт и коды ошибок описаны в [docs/API.md](docs/API.md). Вывод `/health` подтверждает доступность локального backend, но не действительность ключа или доступность внешнего API.
 
 ## Структура проекта
 
@@ -257,6 +285,8 @@ PYTHONPATH=backend .venv/bin/python -m pytest backend/tests -q
 |   |-- ARCHITECTURE.md
 |   |-- API.md
 |   |-- DATA_MODEL.md
+|   |-- JUDGING_DEMO.md
+|   |-- VERIFIED_EXPORTS.md
 |   `-- TOOLS.md
 |-- backend/
 |   |-- app/api/          # Phase 4 HTTP routes, DTOs, SSE, adapters
@@ -274,6 +304,7 @@ PYTHONPATH=backend .venv/bin/python -m pytest backend/tests -q
 |   |-- requirements-api.txt
 |   `-- requirements-api-dev.txt
 |-- frontend/          # React/Vite/TypeScript UI и Cytoscape-граф
+|-- docker-compose.yml # backend/frontend и healthchecks
 |-- starter/
 |   |-- README.md
 |   |-- requirements.txt
