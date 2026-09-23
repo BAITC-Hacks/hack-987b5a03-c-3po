@@ -239,8 +239,8 @@ _TOOL_DEFINITIONS: tuple[JsonObject, ...] = (
         "type": "function",
         "name": "create_review_case",
         "description": (
-            "Create one local analyst review case from a ranked target snapshot. This does not "
-            "block accounts or contact an external system."
+            "Create one local analyst review case from the complete ranked target "
+            "snapshot. This does not block accounts or contact an external system."
         ),
         "strict": True,
         "parameters": {
@@ -256,7 +256,6 @@ _TOOL_DEFINITIONS: tuple[JsonObject, ...] = (
                     "items": {"type": "string", "pattern": "^[0-9]+$"},
                     "minItems": 20,
                     "maxItems": 100,
-                    "uniqueItems": True,
                     "description": (
                         "Ordered target snapshot; each GID must exist in the run's ranking."
                     ),
@@ -264,9 +263,7 @@ _TOOL_DEFINITIONS: tuple[JsonObject, ...] = (
                 "title": {
                     "type": "string",
                     "enum": list(SAFE_REVIEW_CASE_TITLES),
-                    "description": (
-                        "One fixed, reviewed analyst-facing MVP title."
-                    ),
+                    "description": "Server-approved cautious analyst-facing case title.",
                 },
             },
             "required": ["run_id", "target_gids", "title"],
@@ -304,8 +301,9 @@ _TOOL_DEFINITIONS: tuple[JsonObject, ...] = (
         "type": "function",
         "name": "verify_run",
         "description": (
-            "Independently verify database invariants, CSV schemas and counts, score bounds, "
-            "evidence, ranking order, artifact hashes, and review-case consistency."
+            "Independently recompute authoritative analytics and verify database invariants, "
+            "CSV schemas and counts, roles, scores, evidence, clusters, ranking order, "
+            "artifact hashes, and review-case consistency."
         ),
         "strict": True,
         "parameters": {
@@ -414,6 +412,10 @@ def validate_tool_arguments(tool_name: str, arguments: Any) -> JsonObject:
 
     candidate = deepcopy(arguments)
     validator.validate(candidate)
+    if tool_name == "create_review_case" and len(set(candidate["target_gids"])) != len(
+        candidate["target_gids"]
+    ):
+        raise ValidationError("target_gids must be unique")
     if tool_name == "create_review_case" and not is_safe_review_case_title(
         candidate["title"]
     ):

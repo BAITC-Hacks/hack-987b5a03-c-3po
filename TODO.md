@@ -48,16 +48,20 @@ Exit criterion: a deterministic script can execute the complete tool sequence, c
 
 ## Phase 3 — agent orchestration, P0
 
-- [ ] Implement the provider-neutral loop from `docs/AGENT_LOOP.md`.
-- [ ] Implement `DeterministicDemoProvider`.
-- [ ] Implement `OpenAIResponsesProvider` with function calling.
-- [ ] Implement Structured Outputs for terminal `AgentDecision`.
-- [ ] Add timeout, invalid-response, refusal, and tool-failure handling.
-- [ ] Enforce tool budget and retry limits.
-- [ ] Persist safe execution events without chain-of-thought.
-- [ ] Test missing-key behavior without exposing secrets.
+- [x] Implement the provider-neutral loop from `docs/AGENT_LOOP.md`.
+- [x] Implement `DeterministicDemoProvider`.
+- [x] Implement `OpenAIResponsesProvider` with function calling.
+- [x] Implement Structured Outputs for terminal `AgentDecision`.
+- [x] Add timeout, invalid-response, refusal, and tool-failure handling.
+- [x] Enforce tool budget and retry limits.
+- [x] Persist safe execution events without chain-of-thought.
+- [x] Test missing-key behavior without exposing secrets.
 
 Exit criterion: demo and live providers drive the same tools and reach the same verified analytical result.
+
+The Phase 3 integration test runs both providers through the production registry, storage, and bundled parquet dataset. The live provider uses a scripted Responses transport in tests; an actual OpenAI API request requires a configured key and is not part of the automated suite.
+
+- [x] Exercise both providers against the production registry and bundled dataset after Phases 1 and 2 land.
 
 ## Phase 4 — FastAPI golden path, P0
 

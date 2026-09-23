@@ -1,6 +1,6 @@
 # AML Agent backend
 
-Deterministic analytics, storage, controlled tools, and verification for AML Agent.
+Deterministic analytics, storage, controlled tools, verification, and agent orchestration for AML Agent.
 
 Implemented modules:
 
@@ -8,6 +8,15 @@ Implemented modules:
 - `aml_agent.storage`: SQLite state/audit repositories and write-once controlled artifacts;
 - `aml_agent.tools`: strict schemas and state allowlists for all ten agent tools;
 - `aml_agent.tool_runtime`: deterministic execution, local review-case action, export, and independent verification.
+- `aml_agent.agent`: bounded demo/live orchestration using the same production tools and audit store.
+
+Run the agent over the bundled dataset with no API key:
+
+```bash
+.venv/bin/aml-agent-run --mode demo --data data --database var/agent.sqlite3 --artifacts artifacts
+```
+
+For live mode, install `backend[live]`, set `OPENAI_API_KEY` in the environment or ignored root `.env`, then run `aml-agent-run --mode live` with the same data and storage options.
 
 Run the full offline workflow from the repository root:
 

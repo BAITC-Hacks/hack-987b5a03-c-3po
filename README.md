@@ -2,7 +2,7 @@
 
 AML Agent turns an anonymized bank-transfer graph into an explainable investigation queue for an AML analyst. It validates the batch, computes deterministic graph evidence, assigns roles, ranks targets, creates a local review case, and verifies the resulting artifacts.
 
-> Current status: phases 0–2 are implemented. The repository now has a tested deterministic analytics pipeline, strict controlled tools, SQLite audit storage, local review-case creation, immutable exports, and independent verification. OpenAI orchestration, HTTP API, UI, and Docker remain in phases 3–6 of [TODO.md](TODO.md).
+> Current status: phases 0–3 are implemented. The deterministic pipeline and bounded agent orchestration run with real analytics, controlled tools, SQLite audit, a local review case, and independent verification. HTTP API, UI, and Docker remain in phases 4–6 of [TODO.md](TODO.md).
 
 ## Problem
 
@@ -23,7 +23,7 @@ Parquet batch
   -> export and verify required artifacts
 ```
 
-In phase 3, the OpenAI model will orchestrate controlled tools and produce schema-constrained summaries. It will not calculate roles, invent metrics, access arbitrary files, or execute shell commands.
+In live mode, the OpenAI model selects controlled tools and returns a schema-constrained terminal decision. The deterministic backend calculates roles and metrics, creates the case, and verifies the outputs.
 
 ## Implemented golden path (CLI)
 
@@ -35,7 +35,7 @@ inspect_dataset -> build_graph -> compute_graph_features -> cluster_network
 -> verify_run -> completed
 ```
 
-On the bundled dataset it produces 2,248 node assessments, 91 cluster summaries, a ranked top 20, one local review case, three mandatory CSV files, `audit.json`, and a 19-check verification report. No API key is used in phases 0–2.
+On the bundled dataset it produces 2,248 node assessments, 91 cluster summaries, a ranked top 20, one local review case, three mandatory CSV files, `audit.json`, and a 19-check verification report. Demo mode needs no API key.
 
 ### Quick start on Windows
 
@@ -44,6 +44,7 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r backend\requirements.lock
 .\.venv\Scripts\python.exe -m pip install --no-deps --no-build-isolation -e backend
 .\.venv\Scripts\aml-agent-tools.exe --data data --database var\aml-agent.sqlite3 --artifacts artifacts --top 20
+.\.venv\Scripts\aml-agent-run.exe --mode demo --data data --database var\agent.sqlite3 --artifacts artifacts
 ```
 
 ### Quick start on macOS/Linux
@@ -53,9 +54,10 @@ python3.12 -m venv .venv
 .venv/bin/python -m pip install -r backend/requirements.lock
 .venv/bin/python -m pip install --no-deps --no-build-isolation -e backend
 .venv/bin/aml-agent-tools --data data --database var/aml-agent.sqlite3 --artifacts artifacts --top 20
+.venv/bin/aml-agent-run --mode demo --data data --database var/agent.sqlite3 --artifacts artifacts
 ```
 
-A successful run ends with `status: completed`, `verification_status: passed`, and all nine workflow steps marked `ok: true`. Re-run with a new database path for a separate immutable audit record.
+A successful agent run returns `status: completed`; the persisted run has `verification_status: passed`, and all nine workflow tools have `ok: true` results. Each invocation creates a new run record.
 
 ## Dataset
 
@@ -77,7 +79,7 @@ React / Vite UI (phase 5)
        v
 FastAPI application (phase 4) ---- SQLite run/case/audit store [implemented]
        |
-       +---- Agent orchestrator (phase 3) ---- OpenAI Responses API
+       +---- Agent orchestrator [implemented] ---- OpenAI Responses API
        |              |
        |              +---- strict function tools [implemented]
        |
@@ -101,7 +103,12 @@ Detailed design:
 
 ## OpenAI configuration
 
-The live orchestrator is phase 3 work and will use the OpenAI Responses API with function calling and Structured Outputs. The default model is configurable through `OPENAI_MODEL`; it is not hardcoded into analytics or tools.
+The live orchestrator uses the OpenAI Responses API with function calling and Structured Outputs. The default model is configurable through `OPENAI_MODEL`; it is not hardcoded into analytics or tools. Install the optional live dependencies before using `--mode live`:
+
+```bash
+.venv/bin/python -m pip install -e 'backend[live]'
+.venv/bin/aml-agent-run --mode live --data data --database var/live.sqlite3 --artifacts artifacts
+```
 
 1. Copy `.env.example` to `.env` if `.env` does not already exist.
 2. Put your existing key in the local ignored file:
@@ -111,13 +118,13 @@ The live orchestrator is phase 3 work and will use the OpenAI Responses API with
    DEMO_MODE=false
    ```
 
-3. Never paste the key into source code, documentation, issues, logs, screenshots, or commits.
+3. Run the live command from the repository root so the CLI can load the ignored `.env` file. Never paste the key into source code, logs, or commits.
 
-For deterministic offline operation, keep `DEMO_MODE=true`; the graph analysis remains real and only the external model provider is replaced.
+The CLI defaults to `--mode demo`; the graph analysis remains real and only the external model provider is replaced.
+
+The automated suite uses a scripted Responses transport for live-mode integration and makes no billable API request. The demo CLI needs no key.
 
 Official references: [function calling](https://developers.openai.com/api/docs/guides/function-calling), [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs), and [`gpt-5-mini`](https://developers.openai.com/api/docs/models/gpt-5-mini).
-
-The key is not needed yet. When phase 3 starts, put it only in the ignored local `.env` as `OPENAI_API_KEY=...`; never send it in chat or commit it.
 
 ## Run the supplied starter
 
@@ -138,6 +145,18 @@ Expected output:
 - `out/top_nodes.csv`
 
 The starter intentionally leaves role assignment, clustering, ranking, and visualization for the implementation.
+
+## Phase 3 orchestration component
+
+`backend/aml_agent/agent/` contains the bounded run loop, deterministic demo provider, OpenAI Responses adapter, strict tool-call validation, and adapters to the production SQLite audit store and tool runtime. Demo mode executes real analytics and case creation. The integration test compares demo and scripted live-provider results over the bundled parquet files.
+
+Run the component tests with:
+
+```bash
+PYTHONPATH=backend .venv/bin/python -m pytest backend/tests -q
+```
+
+Live mode requires the optional `backend[live]` dependencies and `OPENAI_API_KEY` in the environment or ignored `.env`. No live API request is part of the automated tests.
 
 ## Required final artifacts
 
@@ -175,6 +194,7 @@ The starter intentionally leaves role assignment, clustering, ranking, and visua
 |   `-- TOOLS.md
 |-- backend/
 |   |-- aml_agent/
+|   |   |-- agent/
 |   |   |-- analytics/
 |   |   |-- storage/
 |   |   |-- tools/

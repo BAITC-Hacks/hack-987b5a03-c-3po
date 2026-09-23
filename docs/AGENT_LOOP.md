@@ -11,9 +11,10 @@ For each turn the provider receives:
 1. A stable system instruction describing scope, safety language, and the completion condition.
 2. A compact `RunContext` containing `run_id`, current state, mode, completed tools, counts, warnings, remaining tool budget, and whether analyst confirmation is required.
 3. Only the function tools allowed in the current persisted state.
-4. Previous tool-call items and application-produced `function_call_output` items linked by `call_id`.
+4. Previous tool-call items and application-produced `function_call_output` items linked by `call_id` during the active execution.
 
 Raw parquet content, full graph dumps, secrets, local paths, SQL, and internal exception traces are never sent.
+The Responses chain is held only during an active execution. A resumed run starts a new chain from its persisted state and ranked snapshot, so no model transcript needs to be stored.
 
 ## 3. State machine
 
@@ -38,43 +39,52 @@ case_created
 exported
   -> verify_run
 verified
-  -> completed
+  -> completed (the tool runtime records terminal audit events after a passed verification)
 ```
 
-A tool result changes state only inside its transaction. The model cannot claim or set a state directly.
+A tool result changes state only inside its transaction. The model cannot claim or set a state directly. In the production runtime, a successful `verify_run` records verification and completion events and immediately completes the run. The orchestrator then validates the terminal decision against the persisted passed verification and case.
+If `analyst_confirmation_required` is true at `ranked`, execution returns `needs_user_action` before creating a case.
 
 ## 4. Loop pseudocode
 
 ```python
 async def execute_run(run_id: UUID) -> AgentDecision:
-    for step in range(settings.openai_max_tool_calls):
+    used_tool_calls = 0
+    previous_response_id = None
+    while True:
         context = run_repository.get_compact_context(run_id)
 
-        if context.state == RunState.VERIFIED:
-            return complete_from_persisted_state(context)
+        if context.state in (RunState.VERIFIED, RunState.COMPLETED):
+            decision = await provider.final_decision(context, previous_response_id)
+            return complete_only_if_verification_passed(context, decision)
+
+        if used_tool_calls >= settings.openai_max_tool_calls:
+            return fail(run_id, code="TOOL_BUDGET_EXCEEDED")
 
         tools = tool_registry.allowed_definitions(context.state)
         response = await provider.respond(
             context=context,
             tools=tools,
-            previous_response_id=context.previous_response_id,
+            previous_response_id=previous_response_id,
         )
+        previous_response_id = response.response_id
 
         calls = validate_function_calls(response, tools)
         if not calls:
             raise InvalidAgentResponse("A valid next tool is required")
 
         for call in calls:
-            event_store.tool_started(run_id, call.name, sanitized(call.arguments))
             result = await tool_registry.execute(call.name, call.arguments)
-            event_store.tool_completed(run_id, summarize(result))
-            provider.add_tool_output(call_id=call.call_id, output=result)
+            used_tool_calls += 1
+            # ToolRuntime records tool and verification events in SQLite.
+            provider.add_tool_output(call_id=call.call_id, output=safe_summary(result))
 
             if not result.ok and not result.error.retriable:
                 return fail_from_tool_result(result)
 
-    return fail(run_id, code="TOOL_BUDGET_EXCEEDED")
 ```
+
+The terminal decision uses Structured Outputs. If that response is invalid, refused, or times out after verification, the orchestrator uses a fixed local decision derived from persisted state. Model wording cannot change the case snapshot, checks, or completion gate.
 
 The implementation may execute only one state-changing tool per loop iteration. Read-only `get_node_evidence` calls can be batched up to three targets.
 

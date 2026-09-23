@@ -233,7 +233,6 @@ The canonical input definitions are:
           },
           "minItems": 20,
           "maxItems": 100,
-          "uniqueItems": true,
           "description": "Ordered target snapshot; each GID must exist in the run's ranking."
         },
         "title": {
@@ -327,3 +326,5 @@ The canonical input definitions are:
 The backend rejects any tool call that does not match the persisted state even if the model attempts it.
 
 An exact invocation replay in the immediate successor state is an internal idempotency exception for transport/crash recovery; it is not exposed as an available model tool. Recovery uses immutable argument intent and, when available, the persisted result. A completed run accepts only read-only `get_node_evidence`, which is evaluated without writing events or cached results.
+
+The application also enforces unique `target_gids` and an exact match to the persisted ranked snapshot. `uniqueItems` is intentionally absent from the API-facing strict schema because it is outside the supported Structured Outputs subset; application validation remains authoritative.
