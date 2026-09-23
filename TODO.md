@@ -91,9 +91,9 @@
 
 ## Фаза 6 — воспроизводимость и judging, P0
 
-- [ ] Добавить Dockerfiles для backend и frontend.
-- [ ] Добавить `docker-compose.yml` с healthchecks.
-- [ ] Сделать `DEMO_MODE=true` режимом по умолчанию без ключа.
+- [x] Добавить Dockerfiles для backend и frontend.
+- [x] Добавить `docker-compose.yml` с healthchecks.
+- [x] Сделать `DEMO_MODE=true` режимом по умолчанию без ключа.
 - [ ] Проверить `docker compose up --build` на чистой машине.
 - [ ] Оставить в README только реально реализованное поведение.
 - [ ] Описать критерии ролей, ограничения, масштабирование, live mode и troubleshooting.
