@@ -19,6 +19,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+live = [
+  "openai>=2,<3",
+  "python-dotenv>=1,<2",
+]
 dev = [
   "pytest>=8,<10",
   "pytest-cov>=5,<8",
@@ -28,6 +32,7 @@ dev = [
 [project.scripts]
 aml-agent-pipeline = "aml_agent.cli:pipeline_main"
 aml-agent-tools = "aml_agent.cli:tools_main"
+aml-agent-run = "aml_agent.agent.cli:agent_main"
 
 [tool.setuptools.packages.find]
 where = ["."]

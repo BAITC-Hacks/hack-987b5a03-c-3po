@@ -48,16 +48,20 @@
 
 ## Фаза 3 — agent orchestration, P0
 
-- [ ] Реализовать provider-neutral loop из `docs/AGENT_LOOP.md`.
-- [ ] Реализовать `DeterministicDemoProvider`.
-- [ ] Реализовать `OpenAIResponsesProvider` с function calling.
-- [ ] Реализовать Structured Outputs для конечного `AgentDecision`.
-- [ ] Обработать timeout, невалидный ответ, refusal и ошибку tool.
-- [ ] Ограничить бюджет tools и число retries.
-- [ ] Сохранять безопасные execution events без chain-of-thought.
-- [ ] Проверить ошибку отсутствующего ключа без утечки секрета.
+- [x] Реализовать provider-neutral loop из `docs/AGENT_LOOP.md`.
+- [x] Реализовать `DeterministicDemoProvider`.
+- [x] Реализовать `OpenAIResponsesProvider` с function calling.
+- [x] Реализовать Structured Outputs для конечного `AgentDecision`.
+- [x] Обработать timeout, невалидный ответ, refusal и ошибку tool.
+- [x] Ограничить бюджет tools и число retries.
+- [x] Сохранять безопасные execution events без chain-of-thought.
+- [x] Проверить ошибку отсутствующего ключа без утечки секрета.
 
 Критерий выхода: demo- и live-provider используют одинаковые tools и достигают одного проверенного аналитического результата.
+
+Интеграционный тест запускает оба provider через рабочие registry, storage и встроенный parquet-датасет. Для live-provider тест имитирует транспорт Responses; настоящий запрос OpenAI API требует настроенного ключа и не входит в автоматический набор тестов.
+
+- [x] Проверить оба provider на рабочих tools и встроенном датасете после реализации фаз 1 и 2.
 
 ## Фаза 4 — FastAPI golden path, P0
 

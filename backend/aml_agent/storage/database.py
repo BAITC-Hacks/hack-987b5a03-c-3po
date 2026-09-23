@@ -753,6 +753,26 @@ class Database:
 
     get_tool_payload = get_tool_result
 
+    def get_recorded_tool_result(
+        self, run_id: str | UUID, tool_name: str
+    ) -> ToolResultRecord | None:
+        """Read the accepted result for a run/tool without reconstructing its argument hash."""
+
+        normalized = _normalize_uuid(run_id)
+        tool_name = _validate_symbolic_name(tool_name, "tool_name")
+        with self.transaction(immediate=False) as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM tool_results
+                WHERE run_id = ? AND tool_name = ?
+                ORDER BY created_at ASC LIMIT 2
+                """,
+                (normalized, tool_name),
+            ).fetchall()
+        if len(rows) > 1:
+            raise IdempotencyConflictError("multiple results exist for one run/tool")
+        return None if not rows else self._tool_result_from_row(rows[0])
+
     def put_snapshot(
         self,
         run_id: str | UUID,

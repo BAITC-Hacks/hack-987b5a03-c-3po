@@ -11,9 +11,10 @@ Orchestrator — ограниченная state machine, а не открыты�
 1. Стабильную system instruction с границами задачи, правилами безопасных формулировок и условием завершения.
 2. Компактный `RunContext`: `run_id`, текущее состояние, режим, завершённые tools, счётчики, предупреждения, оставшийся бюджет tools и необходимость подтверждения аналитика.
 3. Только function tools, разрешённые в текущем сохранённом состоянии.
-4. Предыдущие tool-call items и созданные приложением `function_call_output`, связанные через `call_id`.
+4. Предыдущие tool-call items и созданные приложением `function_call_output`, связанные через `call_id` во время текущего запуска.
 
 Содержимое parquet целиком, полные выгрузки графа, секреты, локальные пути, SQL и внутренние stack traces никогда не отправляются модели.
+Цепочка Responses хранится только во время текущего выполнения. Возобновлённый run начинает новую цепочку по сохранённому состоянию и ranking snapshot, без хранения transcript модели.
 
 ## 3. State machine
 
@@ -38,43 +39,53 @@ case_created
 exported
   -> verify_run
 verified
-  -> completed
+  -> completed (runtime записывает terminal audit events после успешной проверки)
 ```
 
-Результат tool меняет состояние только внутри своей транзакции. Модель не может самостоятельно объявить или установить состояние.
+Результат tool меняет состояние только внутри своей транзакции. Модель не может самостоятельно объявить или установить состояние. После успешного `verify_run` рабочий runtime записывает события проверки и завершения, а затем сразу переводит run в `completed`. Orchestrator проверяет конечное решение по сохранённым case и результату verification.
+
+Если на этапе `ranked` установлено `analyst_confirmation_required`, выполнение возвращает `needs_user_action` до создания case.
 
 ## 4. Псевдокод цикла
 
 ```python
 async def execute_run(run_id: UUID) -> AgentDecision:
-    for step in range(settings.openai_max_tool_calls):
+    used_tool_calls = 0
+    previous_response_id = None
+    while True:
         context = run_repository.get_compact_context(run_id)
 
-        if context.state == RunState.VERIFIED:
-            return complete_from_persisted_state(context)
+        if context.state in (RunState.VERIFIED, RunState.COMPLETED):
+            decision = await provider.final_decision(context, previous_response_id)
+            return complete_only_if_verification_passed(context, decision)
+
+        if used_tool_calls >= settings.openai_max_tool_calls:
+            return fail(run_id, code="TOOL_BUDGET_EXCEEDED")
 
         tools = tool_registry.allowed_definitions(context.state)
         response = await provider.respond(
             context=context,
             tools=tools,
-            previous_response_id=context.previous_response_id,
+            previous_response_id=previous_response_id,
         )
+        previous_response_id = response.response_id
 
         calls = validate_function_calls(response, tools)
         if not calls:
             raise InvalidAgentResponse("A valid next tool is required")
 
         for call in calls:
-            event_store.tool_started(run_id, call.name, sanitized(call.arguments))
             result = await tool_registry.execute(call.name, call.arguments)
-            event_store.tool_completed(run_id, summarize(result))
-            provider.add_tool_output(call_id=call.call_id, output=result)
+            used_tool_calls += 1
+            # ToolRuntime сохраняет события tools и verification в SQLite.
+            provider.add_tool_output(call_id=call.call_id, output=safe_summary(result))
 
             if not result.ok and not result.error.retriable:
                 return fail_from_tool_result(result)
 
-    return fail(run_id, code="TOOL_BUDGET_EXCEEDED")
 ```
+
+Конечное решение использует Structured Outputs. Если ответ модели после verification невалиден, содержит refusal или превышает timeout, orchestrator берёт фиксированное локальное решение из сохранённого состояния. Формулировка модели не меняет case snapshot, проверки или условие завершения.
 
 За одну итерацию разрешён только один tool, изменяющий состояние. Read-only вызовы `get_node_evidence` можно объединять максимум для трёх целей.
 

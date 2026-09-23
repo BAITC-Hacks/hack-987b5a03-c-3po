@@ -2,7 +2,7 @@
 
 AML Agent превращает обезличенный граф банковских переводов в объяснимую очередь проверок для AML-аналитика. Система проверяет входные данные, рассчитывает детерминированные графовые признаки, назначает роли, ранжирует цели, создаёт локальный review case и независимо проверяет полученные артефакты.
 
-> Текущий статус: реализованы фазы 0–2. В репозитории есть протестированный детерминированный аналитический pipeline, строгие контролируемые tools, SQLite-хранилище аудита, создание локального review case, неизменяемые экспорты и независимая проверка. OpenAI orchestration, HTTP API, UI и Docker относятся к фазам 3–6 из [TODO.md](TODO.md).
+> Текущий статус: реализованы фазы 0–3. Детерминированный pipeline и ограниченный agent orchestrator используют настоящую аналитику, контролируемые tools, SQLite-аудит, локальный review case и независимую проверку. HTTP API, UI и Docker запланированы в фазах 4–6 из [TODO.md](TODO.md).
 
 ## Проблема
 
@@ -23,7 +23,7 @@ AML Agent — инструмент поддержки решений. Роли �
   -> экспорт и проверка обязательных артефактов
 ```
 
-В фазе 3 модель OpenAI будет оркестрировать контролируемые tools и создавать ответы по заданной схеме. Модель не рассчитывает роли, не придумывает метрики, не получает произвольный доступ к файлам и не выполняет shell-команды.
+В live-режиме модель OpenAI выбирает контролируемые tools и возвращает конечное решение по строгой схеме. Детерминированный backend рассчитывает роли и метрики, создаёт case и проверяет результаты.
 
 ## Реализованный golden path через CLI
 
@@ -35,7 +35,7 @@ inspect_dataset -> build_graph -> compute_graph_features -> cluster_network
 -> verify_run -> completed
 ```
 
-На встроенном датасете система создаёт 2 248 оценок узлов, 91 сводку по кластерам, top-20, один локальный review case, три обязательных CSV-файла, `audit.json` и отчёт из 19 проверок. В фазах 0–2 API-ключ не используется.
+На встроенном датасете система создаёт 2 248 оценок узлов, 91 сводку по кластерам, top-20, один локальный review case, три обязательных CSV-файла, `audit.json` и отчёт из 19 проверок. Demo-режиму API-ключ не нужен.
 
 ### Быстрый запуск в Windows
 
@@ -44,6 +44,7 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r backend\requirements.lock
 .\.venv\Scripts\python.exe -m pip install --no-deps --no-build-isolation -e backend
 .\.venv\Scripts\aml-agent-tools.exe --data data --database var\aml-agent.sqlite3 --artifacts artifacts --top 20
+.\.venv\Scripts\aml-agent-run.exe --mode demo --data data --database var\agent.sqlite3 --artifacts artifacts
 ```
 
 ### Быстрый запуск в macOS/Linux
@@ -53,9 +54,10 @@ python3.12 -m venv .venv
 .venv/bin/python -m pip install -r backend/requirements.lock
 .venv/bin/python -m pip install --no-deps --no-build-isolation -e backend
 .venv/bin/aml-agent-tools --data data --database var/aml-agent.sqlite3 --artifacts artifacts --top 20
+.venv/bin/aml-agent-run --mode demo --data data --database var/agent.sqlite3 --artifacts artifacts
 ```
 
-Успешный запуск завершается значениями `status: completed`, `verification_status: passed` и `ok: true` для всех девяти шагов. Для отдельной неизменяемой записи аудита запустите workflow с новым путём к базе данных.
+Успешный agent run возвращает `status: completed`; сохранённый run имеет `verification_status: passed`, а результаты всех девяти tools содержат `ok: true`. Каждый запуск создаёт новую запись run.
 
 ## Датасет
 
@@ -77,7 +79,7 @@ React / Vite UI (фаза 5)
        v
 FastAPI-приложение (фаза 4) ---- SQLite-хранилище run/case/audit [реализовано]
        |
-       +---- Agent orchestrator (фаза 3) ---- OpenAI Responses API
+       +---- Agent orchestrator [реализовано] ---- OpenAI Responses API
        |              |
        |              +---- строгие function tools [реализовано]
        |
@@ -101,7 +103,12 @@ FastAPI-приложение (фаза 4) ---- SQLite-хранилище run/cas
 
 ## Настройка OpenAI
 
-Live orchestrator относится к фазе 3 и использует OpenAI Responses API с function calling и Structured Outputs. Модель задаётся через `OPENAI_MODEL` и не зашивается в аналитику или tools.
+Live orchestrator использует OpenAI Responses API с function calling и Structured Outputs. Модель задаётся через `OPENAI_MODEL` и не зашивается в аналитику или tools. Для `--mode live` установите дополнительные зависимости:
+
+```bash
+.venv/bin/python -m pip install -e 'backend[live]'
+.venv/bin/aml-agent-run --mode live --data data --database var/live.sqlite3 --artifacts artifacts
+```
 
 1. Скопируйте `.env.example` в `.env`, если локального файла ещё нет.
 2. Добавьте существующий ключ только в локальный игнорируемый файл:
@@ -111,13 +118,13 @@ Live orchestrator относится к фазе 3 и использует OpenA
    DEMO_MODE=false
    ```
 
-3. Никогда не добавляйте ключ в исходный код, документацию, issues, логи, скриншоты или коммиты.
+3. Запустите live-команду из корня репозитория, чтобы CLI загрузил игнорируемый `.env`. Никогда не добавляйте ключ в исходный код, логи или коммиты.
 
-Для детерминированной offline-работы оставьте `DEMO_MODE=true`: графовая аналитика остаётся настоящей, заменяется только внешний model provider.
+CLI по умолчанию запускается с `--mode demo`: графовая аналитика остаётся настоящей, заменяется только внешний model provider.
+
+Автоматические тесты используют имитацию транспорта Responses для проверки live-provider и не отправляют запросы в OpenAI API.
 
 Официальная документация: [function calling](https://developers.openai.com/api/docs/guides/function-calling), [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs) и [`gpt-5-mini`](https://developers.openai.com/api/docs/models/gpt-5-mini).
-
-До фазы 3 ключ не требуется. Храните его только в игнорируемом локальном `.env` как `OPENAI_API_KEY=...`; не отправляйте ключ в чат и не коммитьте его.
 
 ## Запуск стартового решения
 
@@ -138,6 +145,18 @@ python3.12 -m venv .venv
 - `out/top_nodes.csv`
 
 Starter намеренно не реализует назначение ролей, кластеризацию, ранжирование и визуализацию.
+
+## Компонент orchestration фазы 3
+
+`backend/aml_agent/agent/` содержит ограниченный цикл запуска, demo-provider, адаптер OpenAI Responses, строгую проверку вызовов tools и адаптеры к рабочим SQLite-аудиту и runtime tools. Demo-режим выполняет настоящую аналитику и создание case. Интеграционный тест сравнивает результаты demo- и live-provider на встроенных parquet-файлах; транспорт Responses в тесте имитируется.
+
+Запуск тестов:
+
+```bash
+PYTHONPATH=backend .venv/bin/python -m pytest backend/tests -q
+```
+
+Для live-режима требуются дополнительные зависимости `backend[live]` и `OPENAI_API_KEY` в окружении или игнорируемом `.env`.
 
 ## Обязательные итоговые артефакты
 
@@ -175,6 +194,7 @@ Starter намеренно не реализует назначение роле
 |   `-- TOOLS.md
 |-- backend/
 |   |-- aml_agent/
+|   |   |-- agent/
 |   |   |-- analytics/
 |   |   |-- storage/
 |   |   |-- tools/

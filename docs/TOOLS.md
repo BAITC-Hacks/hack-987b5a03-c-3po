@@ -233,7 +233,6 @@ Allowlist ошибок: `INVALID_STATE`, `INVALID_ARGUMENT`, `DATASET_NOT_FOUND`
           },
           "minItems": 20,
           "maxItems": 100,
-          "uniqueItems": true,
           "description": "Ordered target snapshot; each GID must exist in the run's ranking."
         },
         "title": {
@@ -327,3 +326,5 @@ Allowlist ошибок: `INVALID_STATE`, `INVALID_ARGUMENT`, `DATASET_NOT_FOUND`
 Backend отклоняет любой вызов tool, не соответствующий сохранённому состоянию, даже если модель пытается его выполнить.
 
 Точный повтор вызова в непосредственном следующем состоянии — внутреннее idempotency-исключение для восстановления после транспортной ошибки или сбоя; модели оно не показывается как доступный tool. Восстановление использует неизменяемый intent аргументов и, если он доступен, сохранённый результат. Завершённый run принимает только read-only `get_node_evidence`, который выполняется без записи events или кэшированных результатов.
+
+Уникальность `target_gids` и точное совпадение с сохранённым snapshot ranking дополнительно проверяются в приложении. `uniqueItems` отсутствует в строгой схеме Responses API, поскольку это ограничение не поддерживается соответствующим подмножеством JSON Schema.
