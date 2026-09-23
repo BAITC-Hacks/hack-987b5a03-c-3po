@@ -1,59 +1,59 @@
-# Phases 0–2 verification record
+# Результаты проверки фаз 0–2
 
-Date: 2026-09-23
+Дата: 2026-09-23
 
-## Implemented scope
+## Реализованный scope
 
-- Phase 0: repository contracts, bundled data, clean environment, starter baseline, and dataset checksum regression.
-- Phase 1: deterministic validation, graph features, communities, roles, priority ranking, and the three required CSV exports.
-- Phase 2: strict tool schemas, persisted state machine, SQLite audit trail, idempotent local review case, controlled artifacts, and independent verification.
+- Фаза 0: контракты репозитория, встроенные данные, чистое окружение, baseline starter и regression-проверка checksum датасета.
+- Фаза 1: детерминированная валидация, графовые признаки, сообщества, роли, priority ranking и три обязательных CSV-экспорта.
+- Фаза 2: строгие схемы tools, сохраняемая state machine, SQLite audit trail, идемпотентный локальный review case, контролируемые артефакты и независимая проверка.
 
-OpenAI orchestration, FastAPI, UI, and Docker are intentionally outside this checkpoint and remain in phases 3–6.
+OpenAI orchestration, FastAPI, UI и Docker намеренно не входят в эту контрольную точку и относятся к фазам 3–6.
 
-## Bundled dataset result
+## Результат на встроенном датасете
 
 ```text
 dataset fingerprint: 0f3f4e66909277f7a6023aa98a143bc14923329a54d2f6fd7f618b3ac945e954
 ruleset:            v1
-node assessments:   2,248
-clusters:           91
-ranked targets:     20
-depth-4 flags:      444
-review cases:       1 per run
-verification:       19 checks passed
+оценки узлов:       2 248
+кластеры:           91
+ранжированные цели: 20
+флаги depth=4:      444
+review cases:       1 на run
+verification:       успешно пройдено 19 проверок
 ```
 
-The complete phase 2 tool workflow ends in `completed` with `verification_status=passed` and writes `nodes_roles.csv`, `clusters.csv`, `top_nodes.csv`, and `audit.json` beneath the run UUID.
+Полный workflow tools фазы 2 завершается состоянием `completed` и значением `verification_status=passed`, записывая `nodes_roles.csv`, `clusters.csv`, `top_nodes.csv` и `audit.json` в директорию UUID соответствующего run.
 
-Deterministic role counts for ruleset `v1` are 11 coordinators, 22 consolidators, 62 distributors, 28 transit nodes, 135 terminals, and 1,990 peripheral nodes. These are structural review hypotheses, not labels of guilt.
+Детерминированное распределение ролей для ruleset `v1`: 11 coordinators, 22 consolidators, 62 distributors, 28 transit nodes, 135 terminals и 1 990 peripheral nodes. Это структурные гипотезы для проверки, а не метки виновности.
 
-## Determinism evidence
+## Подтверждение детерминизма
 
-Two consecutive phase 1 runs over the same dataset produced byte-identical CSV files:
+Два последовательных запуска фазы 1 на одном датасете создали побайтово идентичные CSV-файлы:
 
-| Artifact | SHA-256 |
+| Артефакт | SHA-256 |
 |---|---|
 | `nodes_roles.csv` | `4E83F5B60FBA212D485AF74FE2ED37C43B4072E8476BA27202C53A9A00D7620B` |
 | `clusters.csv` | `D92D723D3291366BA6A00FA3CFD58C9D9DA9C54811DD0D778A306557318C8A79` |
 | `top_nodes.csv` | `E7E1D30EE1D8996FA610BCC6A259F90C6E5C1077F747ABC03EE3CEE7D72F3E8C` |
 
-Observed phase 1 runtime on the development machine was approximately 1.2–1.6 seconds, well below the five-minute limit.
+Наблюдаемое время фазы 1 на машине разработки составило около 1,2–1,6 секунды — значительно меньше лимита в пять минут.
 
-## Quality gates
+## Контрольные проверки качества
 
-- all input GIDs receive exactly one assessment and cluster;
-- 19 orphan seeds remain in the result;
-- no depth-4 truncation is labeled terminal only because outflow is absent;
-- seed pass-through remains unsupported;
-- declared transaction period and edge reconciliation are validated;
-- ranking uses numeric GID tie-breaking and cannot request fewer than 20 targets;
-- tool inputs use strict schemas and persisted state allowlists;
-- completed runs and artifact content are immutable through the storage interfaces;
-- artifact tampering causes independent verification to fail;
-- verification independently recomputes roles, scores, evidence, clusters, and ranking from the registered parquet data;
-- the offline workflow requires no API key.
+- каждый входной GID получает ровно одну оценку и один кластер;
+- все 19 изолированных seed-узлов остаются в результате;
+- усечение на `depth=4` само по себе не приводит к роли terminal;
+- pass-through seed-клиентов остаётся неподдерживаемым;
+- заявленный период транзакций и сверка рёбер проверяются;
+- ranking использует числовое разрешение равных GID и не позволяет запросить меньше 20 целей;
+- tools используют строгие входные схемы и сохраняемые allowlist состояний;
+- завершённые runs и содержимое артефактов неизменяемы через storage-интерфейсы;
+- изменение артефактов приводит к ошибке независимой проверки;
+- verification заново рассчитывает роли, scores, evidence, кластеры и ranking по зарегистрированным parquet-данным;
+- offline workflow не требует API-ключа.
 
-Run the complete test suite with:
+Запуск полного набора тестов:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest backend\tests -q

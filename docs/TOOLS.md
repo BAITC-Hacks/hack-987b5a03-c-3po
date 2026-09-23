@@ -1,20 +1,20 @@
-# AML Agent tool contracts
+# Контракты tools AML Agent
 
-## 1. Contract rules
+## 1. Правила контрактов
 
-- Tools are application functions exposed to the OpenAI Responses API.
-- Every input uses strict JSON Schema with `additionalProperties: false`.
-- The orchestrator receives only tools allowed for the current run state.
-- Tools accept logical IDs, never arbitrary filesystem paths, SQL, or code.
-- All GIDs are decimal strings in JSON.
-- A tool validates its arguments again at execution time; schema validation is not the only security boundary.
-- Analytics tools are deterministic and idempotent for the same run and ruleset.
-- A transport retry may replay a persisted result only for the exact same arguments in that tool's immediate successor state. Replays from later states or `completed` are rejected.
-- Review-case titles are selected from a fixed server-approved cautious allowlist; arbitrary model wording is rejected.
+- Tools — функции приложения, доступные через OpenAI Responses API.
+- Каждый input использует строгую JSON Schema с `additionalProperties: false`.
+- Orchestrator получает только tools, разрешённые для текущего состояния run.
+- Tools принимают логические ID, но никогда не произвольные пути файловой системы, SQL или код.
+- Все GID в JSON представлены десятичными строками.
+- Tool повторно проверяет аргументы при выполнении; проверка схемы не является единственной границей безопасности.
+- Analytics tools детерминированы и идемпотентны для одного run и ruleset.
+- Transport retry может повторно вернуть сохранённый результат только для точно таких же аргументов в непосредственном следующем состоянии tool. Повторы из более поздних состояний или `completed` отклоняются.
+- Title review case выбирается из фиксированного осторожного allowlist, утверждённого сервером; произвольная формулировка модели отклоняется.
 
-## 2. Standard result envelope
+## 2. Стандартный result envelope
 
-Every tool returns this application-side JSON shape:
+Каждый tool возвращает со стороны приложения JSON следующего вида:
 
 ```json
 {
@@ -29,7 +29,7 @@ Every tool returns this application-side JSON shape:
 }
 ```
 
-On failure, `ok` is false and `error` is:
+При ошибке `ok` равен false, а `error` имеет вид:
 
 ```json
 {
@@ -40,11 +40,11 @@ On failure, `ok` is false and `error` is:
 }
 ```
 
-The error allowlist is `INVALID_STATE`, `INVALID_ARGUMENT`, `DATASET_NOT_FOUND`, `DATASET_SCHEMA_INVALID`, `DATASET_INCONSISTENT`, `ANALYTICS_FAILED`, `CASE_WRITE_FAILED`, `EXPORT_FAILED`, `VERIFICATION_FAILED`, and `INTERNAL_ERROR`.
+Allowlist ошибок: `INVALID_STATE`, `INVALID_ARGUMENT`, `DATASET_NOT_FOUND`, `DATASET_SCHEMA_INVALID`, `DATASET_INCONSISTENT`, `ANALYTICS_FAILED`, `CASE_WRITE_FAILED`, `EXPORT_FAILED`, `VERIFICATION_FAILED` и `INTERNAL_ERROR`.
 
-## 3. Responses API function definitions
+## 3. Function definitions для Responses API
 
-The canonical input definitions are:
+Ниже приведены канонические input definitions. Идентификаторы и строковые значения schema оставлены без перевода, чтобы контракт совпадал с реализацией:
 
 ```json
 [
@@ -293,9 +293,9 @@ The canonical input definitions are:
 ]
 ```
 
-## 4. Tool-specific result data
+## 4. Данные результата каждого tool
 
-| Tool | Required `data` fields |
+| Tool | Обязательные поля `data` |
 |---|---|
 | `inspect_dataset` | `dataset_sha256`, `n_nodes`, `n_edges`, `n_transactions`, `n_seed`, `turnover_kzt`, `period`, `limitations` |
 | `build_graph` | `n_nodes`, `n_edges`, `n_components_with_edges`, `n_orphan_nodes`, `n_truncated_depth4` |
@@ -308,9 +308,9 @@ The canonical input definitions are:
 | `export_results` | `artifact_names`, `sha256_by_name`, `row_count_by_name` |
 | `verify_run` | `passed`, `checks`, `failed_checks`, `completed_at` |
 
-## 5. State-based allowlist
+## 5. Allowlist по состоянию
 
-| Run state | Tools exposed to the model |
+| Состояние run | Tools, доступные модели |
 |---|---|
 | `created` | `inspect_dataset` |
 | `validated` | `build_graph` |
@@ -322,8 +322,8 @@ The canonical input definitions are:
 | `case_created` | `get_node_evidence`, `export_results` |
 | `exported` | `verify_run` |
 | `verified`, `completed` | `get_node_evidence` only |
-| `verification_failed`, `failed` | none |
+| `verification_failed`, `failed` | нет |
 
-The backend rejects any tool call that does not match the persisted state even if the model attempts it.
+Backend отклоняет любой вызов tool, не соответствующий сохранённому состоянию, даже если модель пытается его выполнить.
 
-An exact invocation replay in the immediate successor state is an internal idempotency exception for transport/crash recovery; it is not exposed as an available model tool. Recovery uses immutable argument intent and, when available, the persisted result. A completed run accepts only read-only `get_node_evidence`, which is evaluated without writing events or cached results.
+Точный повтор вызова в непосредственном следующем состоянии — внутреннее idempotency-исключение для восстановления после транспортной ошибки или сбоя; модели оно не показывается как доступный tool. Восстановление использует неизменяемый intent аргументов и, если он доступен, сохранённый результат. Завершённый run принимает только read-only `get_node_evidence`, который выполняется без записи events или кэшированных результатов.

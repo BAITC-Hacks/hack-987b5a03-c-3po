@@ -1,33 +1,33 @@
 # AML Agent
 
-AML Agent turns an anonymized bank-transfer graph into an explainable investigation queue for an AML analyst. It validates the batch, computes deterministic graph evidence, assigns roles, ranks targets, creates a local review case, and verifies the resulting artifacts.
+AML Agent превращает обезличенный граф банковских переводов в объяснимую очередь проверок для AML-аналитика. Система проверяет входные данные, рассчитывает детерминированные графовые признаки, назначает роли, ранжирует цели, создаёт локальный review case и независимо проверяет полученные артефакты.
 
-> Current status: phases 0–2 are implemented. The repository now has a tested deterministic analytics pipeline, strict controlled tools, SQLite audit storage, local review-case creation, immutable exports, and independent verification. OpenAI orchestration, HTTP API, UI, and Docker remain in phases 3–6 of [TODO.md](TODO.md).
+> Текущий статус: реализованы фазы 0–2. В репозитории есть протестированный детерминированный аналитический pipeline, строгие контролируемые tools, SQLite-хранилище аудита, создание локального review case, неизменяемые экспорты и независимая проверка. OpenAI orchestration, HTTP API, UI и Docker относятся к фазам 3–6 из [TODO.md](TODO.md).
 
-## Problem
+## Проблема
 
-An AML analyst starts with 81 known seed clients but must manually trace a four-hop network of 2,248 accounts. The useful decision is not a generic summary: it is **which accounts should be reviewed first, why, and what evidence supports that priority**.
+AML-аналитик начинает с 81 известного seed-клиента, но должен вручную исследовать четырёхуровневую сеть из 2 248 счетов. Полезный результат — не общее резюме, а ответ на три конкретных вопроса: **какие счета проверять первыми, почему и какие данные подтверждают этот приоритет**.
 
-AML Agent is decision support. Roles and priorities are hypotheses for analyst review, not findings of guilt and not instructions to block an account.
+AML Agent — инструмент поддержки решений. Роли и приоритеты являются гипотезами для проверки аналитиком, а не доказательствами вины и не указаниями блокировать счёт.
 
-## Target workflow
+## Целевой workflow
 
 ```text
-Parquet batch
-  -> validate data and limitations
-  -> build directed weighted graph
-  -> compute structural and temporal evidence
-  -> cluster and assign explainable roles
-  -> rank review targets
-  -> create a local AML review case
-  -> export and verify required artifacts
+Пакет parquet
+  -> проверка данных и ограничений
+  -> построение направленного взвешенного графа
+  -> расчёт структурных и временных признаков
+  -> кластеризация и назначение объяснимых ролей
+  -> ранжирование целей для проверки
+  -> создание локального AML review case
+  -> экспорт и проверка обязательных артефактов
 ```
 
-In phase 3, the OpenAI model will orchestrate controlled tools and produce schema-constrained summaries. It will not calculate roles, invent metrics, access arbitrary files, or execute shell commands.
+В фазе 3 модель OpenAI будет оркестрировать контролируемые tools и создавать ответы по заданной схеме. Модель не рассчитывает роли, не придумывает метрики, не получает произвольный доступ к файлам и не выполняет shell-команды.
 
-## Implemented golden path (CLI)
+## Реализованный golden path через CLI
 
-The current offline workflow executes nine state-changing/verification steps; the tenth controlled tool, `get_node_evidence`, is available on demand:
+Текущий offline workflow выполняет девять изменяющих состояние или проверочных шагов. Десятый контролируемый tool, `get_node_evidence`, вызывается по запросу:
 
 ```text
 inspect_dataset -> build_graph -> compute_graph_features -> cluster_network
@@ -35,9 +35,9 @@ inspect_dataset -> build_graph -> compute_graph_features -> cluster_network
 -> verify_run -> completed
 ```
 
-On the bundled dataset it produces 2,248 node assessments, 91 cluster summaries, a ranked top 20, one local review case, three mandatory CSV files, `audit.json`, and a 19-check verification report. No API key is used in phases 0–2.
+На встроенном датасете система создаёт 2 248 оценок узлов, 91 сводку по кластерам, top-20, один локальный review case, три обязательных CSV-файла, `audit.json` и отчёт из 19 проверок. В фазах 0–2 API-ключ не используется.
 
-### Quick start on Windows
+### Быстрый запуск в Windows
 
 ```powershell
 py -3.12 -m venv .venv
@@ -46,7 +46,7 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\aml-agent-tools.exe --data data --database var\aml-agent.sqlite3 --artifacts artifacts --top 20
 ```
 
-### Quick start on macOS/Linux
+### Быстрый запуск в macOS/Linux
 
 ```bash
 python3.12 -m venv .venv
@@ -55,73 +55,73 @@ python3.12 -m venv .venv
 .venv/bin/aml-agent-tools --data data --database var/aml-agent.sqlite3 --artifacts artifacts --top 20
 ```
 
-A successful run ends with `status: completed`, `verification_status: passed`, and all nine workflow steps marked `ok: true`. Re-run with a new database path for a separate immutable audit record.
+Успешный запуск завершается значениями `status: completed`, `verification_status: passed` и `ok: true` для всех девяти шагов. Для отдельной неизменяемой записи аудита запустите workflow с новым путём к базе данных.
 
-## Dataset
+## Датасет
 
-The repository includes the anonymized hackathon dataset:
+В репозитории находится обезличенный датасет хакатона:
 
-- `data/nodes.parquet`: 2,248 clients;
-- `data/edges.parquet`: 3,119 aggregated directed edges;
-- `data/transactions.parquet`: 4,840 individual transactions;
-- period: 2026-07-01 through 2026-07-31;
-- observed turnover: 365,890,012.01 KZT.
+- `data/nodes.parquet`: 2 248 клиентов;
+- `data/edges.parquet`: 3 119 агрегированных направленных рёбер;
+- `data/transactions.parquet`: 4 840 отдельных транзакций;
+- период: с 2026-07-01 по 2026-07-31;
+- наблюдаемый оборот: 365 890 012,01 KZT.
 
-See [data/README.md](data/README.md) for fields and collection constraints. The most important limitation is the four-hop boundary: 444 depth-4 nodes have no visible outgoing transfers and must not automatically be labeled as terminal recipients.
+Поля и ограничения сбора описаны в [data/README.md](data/README.md). Главное ограничение — граница обхода в четыре перехода: у 444 узлов с `depth=4` нет видимых исходящих переводов, поэтому их нельзя автоматически считать конечными получателями.
 
-## Architecture
+## Архитектура
 
 ```text
-React / Vite UI (phase 5)
+React / Vite UI (фаза 5)
        |
        v
-FastAPI application (phase 4) ---- SQLite run/case/audit store [implemented]
+FastAPI-приложение (фаза 4) ---- SQLite-хранилище run/case/audit [реализовано]
        |
-       +---- Agent orchestrator (phase 3) ---- OpenAI Responses API
+       +---- Agent orchestrator (фаза 3) ---- OpenAI Responses API
        |              |
-       |              +---- strict function tools [implemented]
+       |              +---- строгие function tools [реализовано]
        |
-       +---- Deterministic analytics engine [implemented]
+       +---- Детерминированный analytics engine [реализовано]
                      |
                      +---- pandas / NetworkX / SciPy
-                     +---- parquet input
-                     +---- CSV and JSON artifacts
+                     +---- parquet на входе
+                     +---- CSV- и JSON-артефакты
 ```
 
-Detailed design:
+Подробная документация:
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [Phase 0 baseline](docs/BASELINE.md)
-- [Phases 0–2 verification record](docs/PHASES_0_2_RESULTS.md)
-- [Data model](docs/DATA_MODEL.md)
-- [Analytical rules](docs/ANALYTICS.md)
-- [Tool contracts](docs/TOOLS.md)
+- [Архитектура](docs/ARCHITECTURE.md)
+- [Baseline фазы 0](docs/BASELINE.md)
+- [Результаты проверки фаз 0–2](docs/PHASES_0_2_RESULTS.md)
+- [Модель данных](docs/DATA_MODEL.md)
+- [Аналитические правила](docs/ANALYTICS.md)
+- [Контракты tools](docs/TOOLS.md)
 - [Agent loop](docs/AGENT_LOOP.md)
-- [Implementation checklist](TODO.md)
+- [План реализации](TODO.md)
 
-## OpenAI configuration
+## Настройка OpenAI
 
-The live orchestrator is phase 3 work and will use the OpenAI Responses API with function calling and Structured Outputs. The default model is configurable through `OPENAI_MODEL`; it is not hardcoded into analytics or tools.
+Live orchestrator относится к фазе 3 и использует OpenAI Responses API с function calling и Structured Outputs. Модель задаётся через `OPENAI_MODEL` и не зашивается в аналитику или tools.
 
-1. Copy `.env.example` to `.env` if `.env` does not already exist.
-2. Put your existing key in the local ignored file:
+1. Скопируйте `.env.example` в `.env`, если локального файла ещё нет.
+2. Добавьте существующий ключ только в локальный игнорируемый файл:
 
    ```dotenv
    OPENAI_API_KEY=your-existing-key
    DEMO_MODE=false
    ```
 
-3. Never paste the key into source code, documentation, issues, logs, screenshots, or commits.
+3. Никогда не добавляйте ключ в исходный код, документацию, issues, логи, скриншоты или коммиты.
 
-For deterministic offline operation, keep `DEMO_MODE=true`; the graph analysis remains real and only the external model provider is replaced.
+Для детерминированной offline-работы оставьте `DEMO_MODE=true`: графовая аналитика остаётся настоящей, заменяется только внешний model provider.
 
-Official references: [function calling](https://developers.openai.com/api/docs/guides/function-calling), [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs), and [`gpt-5-mini`](https://developers.openai.com/api/docs/models/gpt-5-mini).
+Официальная документация: [function calling](https://developers.openai.com/api/docs/guides/function-calling), [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs) и [`gpt-5-mini`](https://developers.openai.com/api/docs/models/gpt-5-mini).
 
-The key is not needed yet. When phase 3 starts, put it only in the ignored local `.env` as `OPENAI_API_KEY=...`; never send it in chat or commit it.
+До фазы 3 ключ не требуется. Храните его только в игнорируемом локальном `.env` как `OPENAI_API_KEY=...`; не отправляйте ключ в чат и не коммитьте его.
 
-## Run the supplied starter
+## Запуск стартового решения
 
-The starter validates the parquet files, builds the graph, calculates basic features, and writes empty output templates. It is a baseline, not the finished product.
+Starter проверяет parquet-файлы, строит граф, рассчитывает базовые признаки и записывает пустые шаблоны результатов. Это baseline, а не готовый продукт.
 
 ```bash
 python3.12 -m venv .venv
@@ -129,34 +129,34 @@ python3.12 -m venv .venv
 .venv/bin/python starter/starter.py --data data --out out
 ```
 
-On Windows, replace `.venv/bin/python` with `.\.venv\Scripts\python.exe`.
+В Windows замените `.venv/bin/python` на `.\.venv\Scripts\python.exe`.
 
-Expected output:
+Ожидаемые файлы:
 
 - `out/nodes_roles.csv`
 - `out/clusters.csv`
 - `out/top_nodes.csv`
 
-The starter intentionally leaves role assignment, clustering, ranking, and visualization for the implementation.
+Starter намеренно не реализует назначение ролей, кластеризацию, ранжирование и визуализацию.
 
-## Required final artifacts
+## Обязательные итоговые артефакты
 
-- `nodes_roles.csv`: one row for every one of the 2,248 nodes;
-- `clusters.csv`: cluster statistics and a cautious hypothesis;
-- `top_nodes.csv`: at least 20 ranked review targets;
-- browser UI with graph direction, roles, clusters, GID search, execution trace, and before/after state;
-- audit record containing dataset hash, ruleset version, tool events, warnings, and verification result.
+- `nodes_roles.csv`: одна строка для каждого из 2 248 узлов;
+- `clusters.csv`: статистика кластеров и осторожная гипотеза;
+- `top_nodes.csv`: минимум 20 ранжированных целей для проверки;
+- браузерный UI с направлением графа, ролями, кластерами, поиском GID, execution trace и состоянием до/после;
+- запись аудита с хешем датасета, версией ruleset, событиями tools, предупреждениями и результатом проверки.
 
-## Safety and explainability
+## Безопасность и объяснимость
 
-- GIDs are serialized as strings in JSON because their values exceed JavaScript's safe integer range. CSV/parquet retain `int64`.
-- Seed inflows are incomplete, so their pass-through ratio is not used blindly.
-- A depth-4 node with no visible outgoing edge is flagged `truncated_by_depth`, not automatically labeled `terminal`.
-- `role_score` is rule strength, not a probability of criminal activity.
-- Every evidence string must cite calculated numbers and stay within 200 characters.
-- External or destructive actions are outside MVP scope; the only write action is creating a local analyst review case and export bundle.
+- В JSON значения GID передаются строками, потому что они превышают безопасный целочисленный диапазон JavaScript. В CSV/parquet сохраняется `int64`.
+- Входящие переводы seed-клиентов неполны, поэтому их коэффициент pass-through нельзя использовать без оговорок.
+- Узел с `depth=4` без видимого исходящего ребра получает флаг `truncated_by_depth`, а не автоматически роль `terminal`.
+- `role_score` означает силу совпадения с правилом, а не вероятность преступной деятельности.
+- Каждая строка evidence должна ссылаться на рассчитанные значения и занимать не более 200 символов.
+- Внешние и разрушительные действия не входят в MVP. Единственное записывающее действие — создание локального review case и пакета экспорта.
 
-## Project structure
+## Структура проекта
 
 ```text
 .
@@ -190,8 +190,8 @@ The starter intentionally leaves role assignment, clustering, ranking, and visua
 `-- README.md
 ```
 
-## Scope boundaries
+## Границы MVP
 
-The hackathon MVP will not include automatic account blocking, regulatory submission, external enrichment, arbitrary code execution, a generic chat interface, multi-agent orchestration, or production-scale processing of a million-node graph.
+В hackathon MVP не входят автоматическая блокировка счетов, отправка данных регулятору, внешнее обогащение, выполнение произвольного кода, generic chat, multi-agent orchestration и production-обработка графа из миллиона узлов.
 
-For a future million-node deployment, the NetworkX analytics layer would move to a graph-processing engine or distributed analytical database while preserving the tool and API contracts.
+Для будущего развёртывания на миллионе узлов слой NetworkX следует заменить графовым движком или распределённой аналитической базой данных, сохранив контракты tools и API.

@@ -1,131 +1,131 @@
-# AML Agent implementation plan
+# План реализации AML Agent
 
-This is the ordered hackathon checklist. Finish the golden path before optional work.
+Это упорядоченный checklist хакатона. Сначала завершаем golden path, затем берём optional-задачи.
 
-## Definition of the golden path
+## Критерий готовности golden path
 
-One click starts a real run on the bundled dataset. The UI streams safe tool events, produces roles for all 2,248 nodes, shows a ranked top 20, creates a local review case, exports the required CSV files, and ends with passed verification.
+Один клик запускает настоящий анализ встроенного датасета. UI показывает безопасный поток событий tools, создаёт роли для всех 2 248 узлов, выводит top-20, создаёт локальный review case, экспортирует обязательные CSV и завершает run успешной независимой проверкой.
 
-## Phase 0 — repository and contracts
+## Фаза 0 — репозиторий и контракты
 
-- [x] Import the organizer starter into `starter/`.
-- [x] Import the supplied parquet dataset into `data/`.
-- [x] Document architecture, data model, tools, agent loop, and analytical rules.
-- [x] Add secure `.env.example` and local ignored `.env` placeholders.
-- [x] Add `AGENTS.md` project instructions.
-- [x] Add SciPy required by starter PageRank.
-- [x] Run the starter in a clean Python environment and record runtime in `docs/BASELINE.md`.
-- [x] Add a dataset fingerprint/checksum manifest.
+- [x] Импортировать starter организаторов в `starter/`.
+- [x] Импортировать предоставленный parquet-датасет в `data/`.
+- [x] Описать архитектуру, модель данных, tools, agent loop и аналитические правила.
+- [x] Добавить безопасный `.env.example` и игнорируемый локальный `.env`.
+- [x] Добавить инструкции проекта в `AGENTS.md`.
+- [x] Добавить SciPy, необходимый starter для PageRank.
+- [x] Запустить starter в чистом Python-окружении и записать время в `docs/BASELINE.md`.
+- [x] Добавить fingerprint/checksum датасета.
 
-## Phase 1 — deterministic core pipeline, P0
+## Фаза 1 — детерминированный core pipeline, P0
 
-- [x] Create `backend/` package and dependency lockfile.
-- [x] Implement typed parquet loaders and dataset validation.
-- [x] Reconcile transactions with aggregated edges.
-- [x] Build the directed weighted graph including orphan nodes.
-- [x] Implement structural features from `docs/ANALYTICS.md`.
-- [x] Implement date-based supporting temporal features.
-- [x] Implement deterministic Louvain clustering with seed 42.
-- [x] Implement versioned role assignment and evidence templates.
-- [x] Implement priority scoring and deterministic tie-breaking.
-- [x] Write all three mandatory CSV files.
-- [x] Add unit and regression tests for data traps.
-- [x] Verify full pipeline runtime stays below five minutes.
+- [x] Создать пакет `backend/` и lockfile зависимостей.
+- [x] Реализовать типизированную загрузку parquet и проверку датасета.
+- [x] Сверить отдельные транзакции с агрегированными рёбрами.
+- [x] Построить направленный взвешенный граф, включая изолированные узлы.
+- [x] Реализовать структурные признаки из `docs/ANALYTICS.md`.
+- [x] Реализовать вспомогательные временные признаки по датам.
+- [x] Реализовать детерминированную Louvain-кластеризацию с seed 42.
+- [x] Реализовать версионируемые правила ролей и шаблоны evidence.
+- [x] Реализовать priority score и детерминированное разрешение равенства.
+- [x] Записать все три обязательных CSV-файла.
+- [x] Добавить unit- и regression-тесты для ловушек данных.
+- [x] Проверить, что полный pipeline работает быстрее пяти минут.
 
-Exit criterion: one Python command creates valid non-empty outputs without OpenAI.
+Критерий выхода: одна Python-команда создаёт валидные непустые результаты без OpenAI.
 
-## Phase 2 — storage, tools, and verification, P0
+## Фаза 2 — хранилище, tools и verification, P0
 
-- [x] Add SQLite models/repositories for runs, events, cases, and artifacts.
-- [x] Implement atomic artifact writes and SHA-256 hashes.
-- [x] Implement the exact strict schemas in `docs/TOOLS.md`.
-- [x] Add state-based tool allowlisting.
-- [x] Make state-changing tools idempotent.
-- [x] Implement `verify_run` independently from the agent.
-- [x] Add tool contract and invalid-state tests.
+- [x] Добавить SQLite-модели и repositories для runs, events, cases и artifacts.
+- [x] Реализовать атомарную запись артефактов и SHA-256.
+- [x] Реализовать точные строгие схемы из `docs/TOOLS.md`.
+- [x] Добавить allowlist tools по состояниям.
+- [x] Сделать изменяющие состояние tools идемпотентными.
+- [x] Реализовать `verify_run` независимо от агента.
+- [x] Добавить тесты контрактов tools и недопустимых состояний.
 
-Exit criterion: a deterministic script can execute the complete tool sequence, create a case, export files, and pass verification.
+Критерий выхода: детерминированный скрипт выполняет полную последовательность tools, создаёт case, экспортирует файлы и успешно проходит verification.
 
-## Phase 3 — agent orchestration, P0
+## Фаза 3 — agent orchestration, P0
 
-- [ ] Implement the provider-neutral loop from `docs/AGENT_LOOP.md`.
-- [ ] Implement `DeterministicDemoProvider`.
-- [ ] Implement `OpenAIResponsesProvider` with function calling.
-- [ ] Implement Structured Outputs for terminal `AgentDecision`.
-- [ ] Add timeout, invalid-response, refusal, and tool-failure handling.
-- [ ] Enforce tool budget and retry limits.
-- [ ] Persist safe execution events without chain-of-thought.
-- [ ] Test missing-key behavior without exposing secrets.
+- [ ] Реализовать provider-neutral loop из `docs/AGENT_LOOP.md`.
+- [ ] Реализовать `DeterministicDemoProvider`.
+- [ ] Реализовать `OpenAIResponsesProvider` с function calling.
+- [ ] Реализовать Structured Outputs для конечного `AgentDecision`.
+- [ ] Обработать timeout, невалидный ответ, refusal и ошибку tool.
+- [ ] Ограничить бюджет tools и число retries.
+- [ ] Сохранять безопасные execution events без chain-of-thought.
+- [ ] Проверить ошибку отсутствующего ключа без утечки секрета.
 
-Exit criterion: demo and live providers drive the same tools and reach the same verified analytical result.
+Критерий выхода: demo- и live-provider используют одинаковые tools и достигают одного проверенного аналитического результата.
 
-## Phase 4 — FastAPI golden path, P0
+## Фаза 4 — FastAPI golden path, P0
 
-- [ ] Add settings validation and `/health`.
-- [ ] Add run create, execute, status, event-stream, node, cluster, case, and artifact endpoints.
-- [ ] Serialize every API GID as a string.
-- [ ] Add SSE event streaming.
-- [ ] Add pagination and bounded ego-graph queries.
-- [ ] Add API integration tests for the golden path.
+- [ ] Добавить проверку настроек и `/health`.
+- [ ] Добавить endpoints создания и выполнения run, статуса, event stream, узла, кластера, case и артефактов.
+- [ ] Передавать каждый GID в API только строкой.
+- [ ] Добавить SSE event streaming.
+- [ ] Добавить pagination и ограниченные ego-graph queries.
+- [ ] Добавить API integration tests для golden path.
 
-Exit criterion: the full workflow can be driven only through documented HTTP endpoints.
+Критерий выхода: весь workflow выполняется только через документированные HTTP endpoints.
 
-## Phase 5 — minimal workflow UI, P0
+## Фаза 5 — минимальный workflow UI, P0
 
-- [ ] Scaffold React/Vite/TypeScript frontend.
-- [ ] Create a landing state explaining the event and the analyst decision.
-- [ ] Add one-click bundled demo run.
-- [ ] Show run status and safe execution trace.
-- [ ] Show top targets with role, priority, evidence, and warnings.
-- [ ] Add GID search using string identifiers.
-- [ ] Add cluster overview and directed 1–2-hop Cytoscape view.
-- [ ] Add node detail drawer.
-- [ ] Show before/after case state and verification badge.
-- [ ] Add artifact downloads and demo reset.
+- [ ] Создать React/Vite/TypeScript frontend.
+- [ ] Сделать landing state с описанием события и решения аналитика.
+- [ ] Добавить запуск встроенного demo одним кликом.
+- [ ] Показывать status run и безопасный execution trace.
+- [ ] Показывать top targets с ролью, priority, evidence и warnings.
+- [ ] Добавить поиск GID со строковыми идентификаторами.
+- [ ] Добавить обзор кластеров и направленный Cytoscape-граф на 1–2 перехода.
+- [ ] Добавить drawer с деталями узла.
+- [ ] Показать состояние case до/после и verification badge.
+- [ ] Добавить скачивание артефактов и reset demo.
 
-Exit criterion: a judge understands the value and sees the action within 60–90 seconds.
+Критерий выхода: судья понимает ценность продукта и видит выполненное действие за 60–90 секунд.
 
-## Phase 6 — reproducibility and judging, P0
+## Фаза 6 — воспроизводимость и judging, P0
 
-- [ ] Add backend and frontend Dockerfiles.
-- [ ] Add `docker-compose.yml` with healthchecks.
-- [ ] Make `DEMO_MODE=true` the no-key default.
-- [ ] Verify `docker compose up --build` on a clean machine.
-- [ ] Replace README status text with only implemented behavior.
-- [ ] Document role criteria, limitations, scaling, live mode, and troubleshooting.
-- [ ] Generate and commit verified example CSV outputs if permitted by submission rules.
-- [ ] Prepare one architecture diagram and demo script.
+- [ ] Добавить Dockerfiles для backend и frontend.
+- [ ] Добавить `docker-compose.yml` с healthchecks.
+- [ ] Сделать `DEMO_MODE=true` режимом по умолчанию без ключа.
+- [ ] Проверить `docker compose up --build` на чистой машине.
+- [ ] Оставить в README только реально реализованное поведение.
+- [ ] Описать критерии ролей, ограничения, масштабирование, live mode и troubleshooting.
+- [ ] Создать и закоммитить проверенные примеры CSV, если это разрешают правила сдачи.
+- [ ] Подготовить одну архитектурную диаграмму и demo script.
 
-Exit criterion: an asynchronous judge can clone, start, understand, and verify the project without team assistance.
+Критерий выхода: судья может самостоятельно клонировать, запустить, понять и проверить проект без помощи команды.
 
-## Phase 7 — optional polish, only after all P0 exits
+## Фаза 7 — optional polish, только после всех P0
 
-- [ ] Add top-N node-removal resilience simulation.
-- [ ] Add cycle and repeated-route indicators.
-- [ ] Add follow-up data-request suggestions for boundary uncertainty.
-- [ ] Add richer cluster hypotheses through OpenAI Structured Outputs.
-- [ ] Record a short GIF/video of the golden path.
+- [ ] Добавить симуляцию устойчивости при удалении top-N узлов.
+- [ ] Добавить признаки циклов и повторяющихся маршрутов.
+- [ ] Добавить предложения по запросу дополнительных данных при неопределённости на границе графа.
+- [ ] Добавить более подробные гипотезы кластеров через OpenAI Structured Outputs.
+- [ ] Записать короткий GIF/video golden path.
 
-## Cut list
+## Что исключать первым
 
-Drop these first if time is limited:
+Если времени мало, первыми исключаем:
 
-- generic natural-language graph chat;
-- multi-agent architecture;
-- arbitrary user dataset upload;
-- authentication and multi-user permissions;
-- real banking-system integration;
-- advanced anomaly ML without labels;
-- full-graph browser rendering;
-- production million-node implementation.
+- generic natural-language chat по графу;
+- multi-agent архитектуру;
+- загрузку произвольного пользовательского датасета;
+- аутентификацию и multi-user permissions;
+- интеграцию с настоящими банковскими системами;
+- сложный anomaly ML без размеченных данных;
+- отрисовку полного графа в браузере;
+- production-реализацию для миллиона узлов.
 
-## Suggested five-hour sequence
+## Предлагаемая последовательность на пять часов
 
-| Time | Goal |
+| Время | Цель |
 |---|---|
-| 00:00–01:15 | Deterministic pipeline and valid CSVs |
-| 01:15–02:15 | Tools, storage, case action, verification |
-| 02:15–03:00 | Demo provider and OpenAI provider |
-| 03:00–04:00 | FastAPI and minimum UI |
-| 04:00–04:35 | Docker and clean-machine run |
-| 04:35–05:00 | README, demo rehearsal, bug buffer |
+| 00:00–01:15 | Детерминированный pipeline и валидные CSV |
+| 01:15–02:15 | Tools, storage, case action и verification |
+| 02:15–03:00 | Demo provider и OpenAI provider |
+| 03:00–04:00 | FastAPI и минимальный UI |
+| 04:00–04:35 | Docker и запуск на чистой машине |
+| 04:35–05:00 | README, репетиция demo и резерв на ошибки |

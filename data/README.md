@@ -1,75 +1,75 @@
-# Dataset: four-hop intrabank transfer graph, July 2026
+# Датасет: четырёхуровневый граф внутрибанковских переводов за июль 2026 года
 
-The dataset is an anonymized directed graph collected from 81 seed clients using outgoing transfers only.
+Датасет представляет собой обезличенный направленный граф, собранный от 81 seed-клиента только по исходящим переводам.
 
-## Collection parameters
+## Параметры сбора
 
-| Parameter | Value |
+| Параметр | Значение |
 |---|---|
-| Seed clients | 81 GIDs |
-| Period | 2026-07-01 through 2026-07-31 |
-| Traversal depth | Four hops |
-| Direction | Outgoing transfers only |
-| Amount threshold | At least 5,000 KZT |
+| Seed-клиенты | 81 GID |
+| Период | с 2026-07-01 по 2026-07-31 |
+| Глубина обхода | Четыре перехода |
+| Направление | Только исходящие переводы |
+| Порог суммы | Не менее 5 000 KZT |
 
-## Size
+## Размер
 
-| Depth | New nodes |
+| Глубина | Новые узлы |
 |---|---:|
 | 0, seed | 81 |
 | 1 | 472 |
 | 2 | 462 |
 | 3 | 789 |
 | 4 | 444 |
-| **Total** | **2,248** |
+| **Всего** | **2 248** |
 
-The graph contains 3,119 unique payer-to-recipient pairs and 4,840 individual transactions.
+Граф содержит 3 119 уникальных пар плательщик–получатель и 4 840 отдельных транзакций.
 
-SHA-256 fingerprints for the committed parquet files are recorded in `SHA256SUMS`.
+SHA-256 fingerprint закоммиченных parquet-файлов записан в `SHA256SUMS`.
 
-## Files
+## Файлы
 
 ### `edges.parquet`
 
-One row per aggregated payer-to-recipient pair.
+Одна строка на агрегированную пару плательщик–получатель.
 
-| Column | Type | Meaning |
+| Колонка | Тип | Значение |
 |---|---|---|
-| `src` | int64 | Payer GID |
-| `dst` | int64 | Recipient GID |
-| `sum_kzt` | float64 | Total transferred during July 2026 |
-| `n_tx` | int64 | Number of individual transactions |
-| `depth` | int8 | Hop where the edge was discovered, 1 through 4 |
+| `src` | int64 | GID плательщика |
+| `dst` | int64 | GID получателя |
+| `sum_kzt` | float64 | Общая сумма переводов за июль 2026 года |
+| `n_tx` | int64 | Количество отдельных транзакций |
+| `depth` | int8 | Переход, на котором найдено ребро: от 1 до 4 |
 
 ### `nodes.parquet`
 
-One row per unique GID, including seed clients.
+Одна строка на каждый уникальный GID, включая seed-клиентов.
 
-| Column | Type | Meaning |
+| Колонка | Тип | Значение |
 |---|---|---|
-| `gid` | int64 | Synthetic client identifier |
-| `depth` | int | Minimum observed hop, with 0 for seed |
-| `is_seed` | bool | Whether the node is one of the 81 starting clients |
+| `gid` | int64 | Синтетический идентификатор клиента |
+| `depth` | int | Минимальный наблюдаемый переход; 0 для seed |
+| `is_seed` | bool | Входит ли узел в 81 начального клиента |
 
 ### `transactions.parquet`
 
-One row per individual transaction for the discovered edges.
+Одна строка на отдельную транзакцию для обнаруженных рёбер.
 
-| Column | Type | Meaning |
+| Колонка | Тип | Значение |
 |---|---|---|
-| `src` | int64 | Payer GID |
-| `dst` | int64 | Recipient GID |
-| `date` | date | Transaction date |
-| `sum_kzt` | float64 | Transaction amount |
+| `src` | int64 | GID плательщика |
+| `dst` | int64 | GID получателя |
+| `date` | date | Дата транзакции |
+| `sum_kzt` | float64 | Сумма транзакции |
 
-## Known limitations
+## Известные ограничения
 
-- The graph stops at depth 4. All 444 depth-4 nodes have no visible outgoing transfers because traversal ended, not necessarily because funds stopped there.
-- Only outgoing expansion is available. Full account balances and transfers from outside the sample are unknown.
-- Seed inflows are incomplete; pass-through ratios for seed accounts are biased.
-- Transfers below 5,000 KZT are absent.
-- Nineteen seed clients have no edges and another twelve appear only as recipients.
-- There are no customer attributes and no ground-truth role labels.
-- Conclusions must be phrased as review hypotheses, not declarations of guilt.
+- Граф заканчивается на `depth=4`. У всех 444 узлов этой глубины нет видимых исходящих переводов, потому что обход завершён, а не обязательно потому, что деньги остановились на этих счетах.
+- Доступно только расширение по исходящим переводам. Полные балансы счетов и переводы извне выборки неизвестны.
+- Входящие переводы seed-клиентов неполны, поэтому их коэффициенты pass-through смещены.
+- Переводы меньше 5 000 KZT отсутствуют.
+- У 19 seed-клиентов нет рёбер, ещё 12 встречаются только как получатели.
+- Нет клиентских атрибутов и размеченных истинных ролей.
+- Выводы должны формулироваться как гипотезы для проверки, а не как утверждения о виновности.
 
-The data is anonymized and supplied for the HackAlem AI hackathon case.
+Данные обезличены и предоставлены для кейса HackAlem AI Hackathon.

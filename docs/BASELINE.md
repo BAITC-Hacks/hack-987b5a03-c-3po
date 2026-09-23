@@ -1,39 +1,39 @@
-# Phase 0 baseline
+# Исходные показатели фазы 0
 
-## Environment
+## Окружение
 
-- Date: 2026-09-23
-- Platform: Windows, local workspace
-- Python: 3.12 virtual environment in ignored `.venv/`
-- Dependencies: `backend/requirements.lock`
+- Дата: 2026-09-23
+- Платформа: Windows, локальный workspace
+- Python: виртуальное окружение 3.12 в игнорируемой директории `.venv/`
+- Зависимости: `backend/requirements.lock`
 
-## Organizer starter
+## Стартовое решение организаторов
 
-Command:
+Команда:
 
 ```powershell
 .\.venv\Scripts\python.exe starter\starter.py --data data --out tmp\starter-out
 ```
 
-Observed wall time: approximately **2.7 seconds** on the development machine.
+Наблюдаемое время выполнения: около **2,7 секунды** на машине разработки.
 
-Observed input checks:
+Результаты проверки входных данных:
 
-- nodes: 2,248;
-- edges: 3,119;
-- transactions: 4,840;
-- seed clients: 81;
-- orphan seed nodes: 19;
-- depth-4 truncated nodes: 444;
-- weakly connected components with edges: 16;
-- edge/transaction pair reconciliation: passed.
+- узлы: 2 248;
+- рёбра: 3 119;
+- транзакции: 4 840;
+- seed-клиенты: 81;
+- изолированные seed-узлы: 19;
+- усечённые узлы `depth=4`: 444;
+- слабосвязные компоненты с рёбрами: 16;
+- сверка пар рёбер и транзакций: успешно.
 
-Starter outputs are intentionally incomplete:
+Результаты starter намеренно неполны:
 
-- `nodes_roles.csv`: 2,248 rows with empty role fields;
-- `clusters.csv`: 0 rows;
-- `top_nodes.csv`: 0 rows.
+- `nodes_roles.csv`: 2 248 строк с пустыми полями ролей;
+- `clusters.csv`: 0 строк;
+- `top_nodes.csv`: 0 строк.
 
-The organizer starter initially failed on a Windows CP1251 terminal because it printed a Unicode arrow. The display-only arrow was replaced with ASCII `->`; analytical behavior was unchanged.
+Изначально starter завершался ошибкой в Windows-терминале с CP1251 из-за вывода Unicode-стрелки. Стрелка, использовавшаяся только для отображения, заменена на ASCII `->`; аналитическое поведение не изменилось.
 
-This baseline proves the supplied data and dependency stack load successfully. Phase 1 must replace the empty templates with complete deterministic results.
+Baseline подтверждает, что предоставленные данные и стек зависимостей успешно загружаются. Фаза 1 заменяет пустые шаблоны полноценными детерминированными результатами.

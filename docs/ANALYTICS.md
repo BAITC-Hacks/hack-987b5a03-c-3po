@@ -1,47 +1,47 @@
-# AML Agent analytical ruleset v1
+# Аналитический ruleset AML Agent v1
 
-## 1. Principle
+## 1. Принцип
 
-All authoritative roles, scores, clusters, and rankings are calculated deterministically. The model may summarize persisted evidence but cannot generate analytical values.
+Все authoritative roles, scores, clusters и rankings рассчитываются детерминированно. Модель может суммировать сохранённые evidence, но не может создавать аналитические значения.
 
-## 2. Structural features
+## 2. Структурные признаки
 
-- `in_degree`, `out_degree`: number of distinct observed counterparties.
-- `in_kzt`, `out_kzt`: observed volume within the sampled graph.
-- `in_tx`, `out_tx`: observed transaction counts.
-- `pass_through_ratio = out_kzt / in_kzt` when observed inflow is positive and the node is not a seed.
-- `pagerank`: directed PageRank weighted by `sum_kzt`.
-- `betweenness`: directed unweighted approximate betweenness with deterministic sample seed 42. Amount is not used as a distance.
-- `seed_reach_count`: number of distinct seeds from which the node is reachable.
-- `rapid_outflow_ratio`: share of outflow occurring zero to two calendar days after any observed inflow.
-- `truncated_by_depth`: depth 4 and no visible outgoing edge.
+- `in_degree`, `out_degree`: число уникальных наблюдаемых контрагентов.
+- `in_kzt`, `out_kzt`: наблюдаемый объём внутри выбранного графа.
+- `in_tx`, `out_tx`: наблюдаемое количество транзакций.
+- `pass_through_ratio = out_kzt / in_kzt`, если наблюдаемый inflow положителен и узел не является seed.
+- `pagerank`: направленный PageRank со взвешиванием по `sum_kzt`.
+- `betweenness`: приближённый направленный невзвешенный betweenness с детерминированным sample seed 42. Сумма не используется как расстояние.
+- `seed_reach_count`: число уникальных seed, из которых достижим узел.
+- `rapid_outflow_ratio`: доля outflow, произошедшего в течение от нуля до двух календарных дней после любого наблюдаемого inflow.
+- `truncated_by_depth`: узел находится на `depth=4` и не имеет видимого исходящего ребра.
 
-Percentile ranks are calculated across all nodes with tie method `average`.
+Percentile ranks рассчитываются по всем узлам с методом равенства `average`.
 
-## 3. Community detection
+## 3. Поиск сообществ
 
-Louvain is applied to an undirected projection whose reciprocal edge amounts are summed. This projection is used only for communities. Direction remains authoritative for roles and evidence.
+Louvain применяется к ненаправленной проекции, в которой суммы взаимных рёбер складываются. Эта проекция используется только для поиска сообществ. Направление остаётся authoritative для ролей и evidence.
 
-MVP parameters:
+Параметры MVP:
 
 - resolution: `1.0`;
 - random seed: `42`;
-- isolated nodes receive singleton clusters;
-- every node receives exactly one `cluster_id`.
+- изолированные узлы получают singleton clusters;
+- каждый узел получает ровно один `cluster_id`.
 
-## 4. Role eligibility and precedence
+## 4. Условия и приоритет ролей
 
-Rules are evaluated in this order so every node receives one primary role.
+Правила проверяются в следующем порядке, чтобы каждый узел получил одну основную роль.
 
 ### coordinator
 
-Eligible when all are true:
+Роль доступна, если выполняются все условия:
 
-- not a seed;
-- depth is less than 4;
-- has both incoming and outgoing edges;
-- `seed_reach_count` is at or above the 90th percentile;
-- `coordinator_index` is at or above the 99th percentile.
+- узел не является seed;
+- depth меньше 4;
+- есть входящие и исходящие рёбра;
+- `seed_reach_count` не ниже 90-го percentile;
+- `coordinator_index` не ниже 99-го percentile.
 
 ```text
 coordinator_index =
@@ -54,50 +54,50 @@ coordinator_index =
 
 ### consolidator
 
-Eligible when:
+Роль доступна, если:
 
-- not a seed;
+- узел не является seed;
 - `in_degree >= 5`;
 - `pass_through_ratio < 0.5`.
 
 ### distributor
 
-Eligible when:
+Роль доступна, если:
 
 - `out_degree >= 10`;
 - `out_degree >= 2 * max(in_degree, 1)`.
 
-This rule does not use seed pass-through ratios.
+Правило не использует pass-through ratio seed-клиентов.
 
 ### transit
 
-Eligible when:
+Роль доступна, если:
 
-- not a seed;
-- depth is less than 4;
-- `in_degree >= 2` and `out_degree >= 1`;
+- узел не является seed;
+- depth меньше 4;
+- `in_degree >= 2` и `out_degree >= 1`;
 - `0.8 <= pass_through_ratio <= 1.2`.
 
-`rapid_outflow_ratio` increases confidence but is not required because only calendar dates are available.
+`rapid_outflow_ratio` повышает уверенность, но не является обязательным: в данных есть только календарные даты без времени.
 
 ### terminal
 
-Eligible when:
+Роль доступна, если:
 
-- not a seed;
-- depth is less than 4;
+- узел не является seed;
+- depth меньше 4;
 - `out_degree == 0`;
 - `in_degree >= 2`.
 
-A depth-4 node can never qualify only because outgoing transfers are absent.
+Узел с `depth=4` не может получить эту роль только из-за отсутствия исходящих переводов.
 
 ### peripheral
 
-Fallback for nodes without sufficient evidence for another role, including isolated seeds and boundary-limited nodes with no stronger observed behavior.
+Fallback для узлов, по которым недостаточно evidence для другой роли, включая изолированные seed и ограниченные границей узлы без более сильного наблюдаемого поведения.
 
 ## 5. Role score
 
-Every component below is clipped to `[0, 1]`.
+Каждый компонент ниже ограничивается диапазоном `[0, 1]`.
 
 ```text
 coordinator = coordinator_index
@@ -125,7 +125,7 @@ terminal =
 peripheral = max(0.25, 1 - max(other_candidate_scores))
 ```
 
-The selected role score is rounded to six decimals in storage and CSV.
+Score выбранной роли округляется до шести знаков в storage и CSV.
 
 ## 6. Priority score
 
@@ -140,44 +140,44 @@ base_priority =
 priority_score = base_priority * (0.90 if truncated_by_depth else 1.00)
 ```
 
-Scores are clipped to `[0, 1]`, rounded to six decimals, then sorted by:
+Scores ограничиваются диапазоном `[0, 1]`, округляются до шести знаков и сортируются по:
 
-1. priority score descending;
-2. role score descending;
-3. GID ascending as a decimal integer.
+1. priority score по убыванию;
+2. role score по убыванию;
+3. GID по возрастанию как десятичное целое число.
 
-The depth-boundary factor reduces false certainty but does not remove uncertain nodes from analyst review.
+Коэффициент границы depth снижает ложную уверенность, но не исключает неопределённые узлы из проверки аналитиком.
 
-## 7. Evidence templates
+## 7. Шаблоны evidence
 
-Evidence is generated from fixed templates and limited to 200 characters. Examples:
+Evidence создаётся из фиксированных шаблонов и ограничивается 200 символами. Примеры:
 
 - `consolidator`: `Received from {in_degree} payers: {in_kzt} KZT; sent onward {pass_pct}%. {seed_reach_count} seeds upstream.`
 - `distributor`: `Sent {out_kzt} KZT to {out_degree} recipients; observed {in_degree} payers. Fan-out indicator.`
 - `transit`: `Observed in/out: {in_kzt}/{out_kzt} KZT; pass-through {ratio}; rapid outflow {rapid_pct}%.`
 - `terminal`: `Received {in_kzt} KZT from {in_degree} payers; no visible outflow before depth boundary.`
 - `coordinator`: `Links paths from {seed_reach_count} seeds; in/out degree {in_degree}/{out_degree}; bridge percentile {betweenness_pct}.`
-- boundary `peripheral`: `Depth-4 boundary: outgoing activity is unobserved; role evidence is insufficient.`
+- граничный `peripheral`: `Depth-4 boundary: outgoing activity is unobserved; role evidence is insufficient.`
 
-The wording uses `observed`, `indicator`, `candidate`, and `for review`; it never states guilt.
+Формулировки используют слова `observed`, `indicator`, `candidate` и `for review` и никогда не утверждают виновность.
 
-## 8. Cluster hypotheses
+## 8. Гипотезы кластеров
 
-Demo mode selects a deterministic template from cluster aggregates:
+Demo mode выбирает детерминированный шаблон по агрегатам кластера:
 
-- at least two seeds plus internal turnover at or above the 75th percentile across clusters: `Multi-seed connected transfer community for analyst review`;
-- highest-priority node has the `distributor` role: `Community organized around a distribution pattern`;
-- highest-priority node has the `consolidator` role: `Community with observed consolidation indicators`;
-- at least 50% of nodes have the `terminal` role: `Recipient-heavy community with limited visible onward flow`;
-- otherwise: `Transfer community without a dominant structural pattern`.
+- минимум два seed и внутренний оборот не ниже 75-го percentile среди кластеров: `Multi-seed connected transfer community for analyst review`;
+- роль узла с наивысшим priority — `distributor`: `Community organized around a distribution pattern`;
+- роль узла с наивысшим priority — `consolidator`: `Community with observed consolidation indicators`;
+- минимум 50% узлов имеют роль `terminal`: `Recipient-heavy community with limited visible onward flow`;
+- иначе: `Transfer community without a dominant structural pattern`.
 
-Live mode may rephrase the chosen template through Structured Outputs but cannot add facts or attributes.
+Live mode может переформулировать выбранный шаблон через Structured Outputs, но не может добавлять факты или атрибуты.
 
-## 9. Required tests
+## 9. Обязательные тесты
 
-- Boundary node with no outflow is not labeled terminal.
-- Seed pass-through does not affect seed role eligibility.
-- Every input node receives exactly one role and cluster.
-- Repeated execution produces byte-stable ordered CSV rows after normalized formatting.
-- Each evidence string is non-empty, numeric, cautious, and at most 200 characters.
-- Priority ordering is deterministic for ties.
+- Граничный узел без outflow не получает роль terminal.
+- Seed pass-through не влияет на доступность роли для seed.
+- Каждый входной узел получает ровно одну роль и один кластер.
+- Повторный запуск создаёт побайтово стабильные упорядоченные строки CSV после нормализованного форматирования.
+- Каждая строка evidence непустая, числовая, осторожная и не длиннее 200 символов.
+- При равных значениях priority ordering остаётся детерминированным.
