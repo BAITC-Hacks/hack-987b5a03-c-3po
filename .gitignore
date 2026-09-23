@@ -13,7 +13,11 @@ venv/
 dist/
 build/
 coverage/
+artifacts/
+out/
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
 __pycache__/
 *.py[cod]
 
@@ -23,10 +27,11 @@ __pycache__/
 *.swp
 .cache/
 tmp/
+aml_agent.db
+*.sqlite3
 
 # Editors and operating systems
 .idea/
 .vscode/
 .DS_Store
 Thumbs.db
-
