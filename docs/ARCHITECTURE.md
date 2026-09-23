@@ -60,32 +60,27 @@ Provider adapter        Tool registry
         runs, events, cases               CSV, JSON audit
 ```
 
-## 4. Proposed repository layout
+## 4. Repository layout
 
 ```text
 backend/
-  app/
-    api/                  # FastAPI routes and SSE
-    agent/                # loop, state machine, prompts, providers
+  aml_agent/
     analytics/            # graph, features, roles, ranking, clusters
-    models/               # Pydantic/domain models
     storage/              # SQLite repositories and artifact paths
-    tools/                # strict tool registry and implementations
-    config.py
-    main.py
+    tools/                # strict schemas and state allowlist
+    tool_runtime.py       # phase 2 deterministic tool execution
+    cli.py
   tests/
-  requirements.txt
-frontend/
-  src/
-    api/
-    components/
-    pages/
-    types/
-  package.json
+  pyproject.toml
+  requirements.lock
 data/
 starter/
 docs/
 ```
+
+Phases 3–5 will add the provider/orchestrator modules, FastAPI routes, and the
+`frontend/` application without moving the implemented analytics and storage
+boundaries.
 
 ## 5. Dependency rules
 
@@ -103,7 +98,7 @@ docs/
 3. Tool events are persisted before being streamed over `GET /api/runs/{run_id}/events` using SSE.
 4. Analytics artifacts are written under `artifacts/{run_id}/` using an atomic temporary-file-then-rename strategy.
 5. `create_review_case` persists the top targets and changes the visible before/after state.
-6. `verify_run` checks the database state and generated files independently of the agent.
+6. `verify_run` reloads the registered parquet data, recomputes authoritative analytics, and compares the generated files independently of the agent and in-memory cache.
 7. Only a verified run can enter `completed` status or expose final downloads.
 
 ## 7. API surface

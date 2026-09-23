@@ -8,6 +8,7 @@ node_modules/
 vendor/
 .venv/
 venv/
+*.egg-info/
 
 # Build and test output
 dist/
@@ -29,6 +30,8 @@ __pycache__/
 tmp/
 aml_agent.db
 *.sqlite3
+.coverage
+htmlcov/
 
 # Editors and operating systems
 .idea/

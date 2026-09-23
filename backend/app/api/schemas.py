@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated, Generic, Literal, TypeVar
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import (
@@ -228,10 +228,7 @@ class NodeDetail(Contract):
     ego_graph: EgoGraph
 
 
-T = TypeVar("T")
-
-
-class Page(Contract, Generic[T]):
+class Page[T](Contract):
     items: list[T]
     total: int
     offset: int

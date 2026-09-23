@@ -3,8 +3,9 @@
 ## Implementation status
 
 The HTTP layer is implemented without importing or replacing Phases 1–3. Its
-entry point is `backend.app.main.create_app`. The production analytics, storage,
-tools, and orchestrator are owned by those phases and are not implemented here.
+entry point is `backend.app.main.create_app`. Phase 1–2 analytics, storage,
+tools, and verification are implemented in `backend/aml_agent`. Phase 3 owns
+the orchestrator and is still pending. The HTTP integration adapter is pending.
 
 The default factory provides `/health`, `/docs`, and `/openapi.json`. Without
 injected adapters, `/health` returns HTTP 200 with `backend_ready: false`, while
@@ -13,7 +14,8 @@ This is API liveness, not readiness of the complete AML workflow.
 
 `backend/tests/api/fakes.py` contains test doubles only. Neither this module nor
 its fabricated assessments are imported by the application or used in demo mode.
-The full exit criterion in TODO.md remains pending until real adapters are wired.
+The full Phase 4 exit criterion in TODO.md remains pending until real adapters
+are wired to the implemented Phase 1–2 core and the Phase 3 orchestrator.
 
 ## Launch and settings
 
@@ -199,6 +201,12 @@ Required integration invariants:
    must not leave an analytics thread continuing writes after the claim is released.
 6. `read_artifact` returns owned allowlisted bytes and their persisted checksum.
    `reset_demo` enforces its own transaction/claim checks, not just API checks.
+
+The Phase 2 repository currently stores tool results and export snapshots rather
+than separate persisted node/edge/cluster tables. The adapter must obtain HTTP
+queries from verified snapshots or approved read services; it must not make the
+API depend on private in-memory runtime caches. The Phase 2 case stores ordered
+target GIDs; the adapter must join the stored ranking for `CaseView.targets`.
 
 After wiring, drive the real workflow through HTTP alone: create, execute, consume
 events, read status/nodes/clusters/case, and download all mandatory files. Verify

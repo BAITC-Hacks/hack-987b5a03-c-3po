@@ -32,7 +32,7 @@ Source parquet and CSV files keep GIDs as `int64`. Every API, JSON, SQLite text 
 |---|---|---|
 | `src` | int64 | Present in nodes |
 | `dst` | int64 | Present in nodes |
-| `date` | date | Within the declared batch period |
+| `date` | date | Within the period declared by the trusted dataset registry |
 | `sum_kzt` | float64 | At least 5,000; finite and positive |
 
 Transactions grouped by `(src, dst)` must reproduce both `edges.sum_kzt` within 0.01 KZT and `edges.n_tx` exactly.
@@ -119,11 +119,12 @@ Role precedence for `v1` is `coordinator`, `consolidator`, `distributor`, `trans
 Run states:
 
 ```text
-created -> validated -> graph_ready -> analyzed -> classified
-        -> ranked -> case_created -> verified -> completed
+created -> validated -> graph_ready -> analyzed -> clustered -> classified
+        -> ranked -> case_created -> exported -> verified -> completed
 
-Any state may transition to failed; ranked/case_created may transition to
-verification_failed. A completed run is immutable.
+Any non-completed state may transition to failed; ranked/case_created/exported
+may transition to verification_failed. A completed run and its analytical
+snapshots, tool results, events, and artifact content are immutable.
 ```
 
 ### AgentEvent
@@ -145,7 +146,7 @@ verification_failed. A completed run is immutable.
 |---|---|---|
 | `case_id` | UUID | Primary key |
 | `run_id` | UUID | Source run, unique for MVP |
-| `title` | string | Human-readable case label |
+| `title` | string | One of the fixed server-approved cautious review labels |
 | `status` | enum | `ready_for_review`, `in_review`, `closed` |
 | `target_gids` | string array | Immutable target snapshot |
 | `created_by` | enum | `agent` or `analyst` |
@@ -188,3 +189,4 @@ At least 20 rows in descending priority order.
 4. Evidence is reproducible from persisted features and ruleset version.
 5. Orphan seed nodes remain in outputs and receive a documented low-evidence assessment.
 6. Re-running the same dataset and ruleset produces the same analytical outputs.
+7. Verification recomputes authoritative roles, scores, evidence, clusters, and ranking from the registered input rather than trusting exported values.

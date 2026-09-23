@@ -165,10 +165,10 @@ The wording uses `observed`, `indicator`, `candidate`, and `for review`; it neve
 
 Demo mode selects a deterministic template from cluster aggregates:
 
-- multiple seeds plus high internal turnover: `Multi-seed connected transfer community for analyst review`;
-- dominant fan-out node: `Community organized around a distribution pattern`;
-- dominant retained inflow: `Community with observed consolidation indicators`;
-- terminal-heavy: `Recipient-heavy community with limited visible onward flow`;
+- at least two seeds plus internal turnover at or above the 75th percentile across clusters: `Multi-seed connected transfer community for analyst review`;
+- highest-priority node has the `distributor` role: `Community organized around a distribution pattern`;
+- highest-priority node has the `consolidator` role: `Community with observed consolidation indicators`;
+- at least 50% of nodes have the `terminal` role: `Recipient-heavy community with limited visible onward flow`;
 - otherwise: `Transfer community without a dominant structural pattern`.
 
 Live mode may rephrase the chosen template through Structured Outputs but cannot add facts or attributes.

@@ -1,1 +1,1 @@
-"""Backend tests."""
+"""AML Agent backend test suite."""
