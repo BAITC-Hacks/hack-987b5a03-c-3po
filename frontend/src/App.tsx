@@ -3,6 +3,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useRef,
   useState,
   type FormEvent,
 } from "react";
@@ -204,6 +205,8 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
 }
 
 export default function App() {
+  const mobileNavRef = useRef<HTMLElement>(null);
+  const clickedSectionRef = useRef<{ id: SectionId; at: number } | null>(null);
   const [language, setLanguage] = useState<Language>(() => {
     const saved = window.localStorage?.getItem(LANGUAGE_KEY);
     return saved === "ru" || saved === "kk" || saved === "en" ? saved : "en";
@@ -267,6 +270,95 @@ export default function App() {
     window.addEventListener("hashchange", syncSection);
     return () => window.removeEventListener("hashchange", syncSection);
   }, []);
+
+  useEffect(() => {
+    const syncSectionFromScroll = () => {
+      const sections = NAV.slice(1).map((item) => ({
+        id: item.id,
+        rect: document.getElementById(item.id)?.getBoundingClientRect(),
+      }));
+      if (sections.some((section) => !section.rect?.height)) return;
+
+      const pageHeight = Math.max(
+        document.documentElement.scrollHeight,
+        document.body.scrollHeight,
+      );
+      const atBottom = window.scrollY + window.innerHeight >= pageHeight - 4;
+      const clicked = clickedSectionRef.current;
+      if (clicked) {
+        const top = document
+          .getElementById(clicked.id)
+          ?.getBoundingClientRect().top;
+        const anchorTop =
+          clicked.id === "overview" ? 0 : window.innerWidth <= 900 ? 125 : 90;
+        const reached =
+          (clicked.id === "overview" && window.scrollY <= 4) ||
+          (clicked.id === "case" && atBottom) ||
+          (top !== undefined && Math.abs(top - anchorTop) <= 32);
+        if (!reached && performance.now() - clicked.at < 1500) return;
+        clickedSectionRef.current = null;
+      }
+
+      if (atBottom) {
+        setActiveSection("case");
+        return;
+      }
+      const activationLine = Math.min(window.innerHeight * 0.35, 260);
+      let visible: SectionId = "overview";
+      for (const section of sections) {
+        if (section.rect && section.rect.top <= activationLine) {
+          visible = section.id;
+        }
+      }
+      setActiveSection(visible);
+    };
+    const cancelClickedSection = () => {
+      clickedSectionRef.current = null;
+    };
+    const cancelOnScrollKey = (event: KeyboardEvent) => {
+      if (
+        [
+          "ArrowDown",
+          "ArrowUp",
+          "PageDown",
+          "PageUp",
+          "Home",
+          "End",
+          " ",
+        ].includes(event.key)
+      ) {
+        cancelClickedSection();
+      }
+    };
+    window.addEventListener("scroll", syncSectionFromScroll, { passive: true });
+    window.addEventListener("wheel", cancelClickedSection, { passive: true });
+    window.addEventListener("touchstart", cancelClickedSection, {
+      passive: true,
+    });
+    window.addEventListener("keydown", cancelOnScrollKey);
+    syncSectionFromScroll();
+    return () => {
+      window.removeEventListener("scroll", syncSectionFromScroll);
+      window.removeEventListener("wheel", cancelClickedSection);
+      window.removeEventListener("touchstart", cancelClickedSection);
+      window.removeEventListener("keydown", cancelOnScrollKey);
+    };
+  }, []);
+
+  useEffect(() => {
+    const nav = mobileNavRef.current;
+    if (!nav || window.innerWidth > 900 || typeof nav.scrollBy !== "function")
+      return;
+    const selected = nav.querySelector<HTMLElement>(".nav-link.active");
+    if (!selected) return;
+    const navRect = nav.getBoundingClientRect();
+    const selectedRect = selected.getBoundingClientRect();
+    const leftGap = selectedRect.left - navRect.left;
+    const rightGap = selectedRect.right - navRect.right;
+    const delta =
+      leftGap < 12 ? leftGap - 12 : rightGap > -12 ? rightGap + 12 : 0;
+    if (delta) nav.scrollBy({ left: delta, behavior: "smooth" });
+  }, [activeSection, language]);
 
   const checkHealth = useCallback(async () => {
     setHealth("checking");
@@ -535,7 +627,10 @@ export default function App() {
       className={`nav-link ${activeSection === item.id ? "active" : ""}`}
       href={`#${item.id}`}
       key={item.id}
-      onClick={() => setActiveSection(item.id)}
+      onClick={() => {
+        clickedSectionRef.current = { id: item.id, at: performance.now() };
+        setActiveSection(item.id);
+      }}
       aria-current={activeSection === item.id ? "location" : undefined}
     >
       <span className="nav-dot" />
@@ -599,7 +694,11 @@ export default function App() {
             </label>
           </div>
         </header>
-        <nav className="mobile-nav" aria-label={label("Workspace sections")}>
+        <nav
+          ref={mobileNavRef}
+          className="mobile-nav"
+          aria-label={label("Workspace sections")}
+        >
           {navLinks}
         </nav>
         <div className="content-wrap">
@@ -683,7 +782,9 @@ export default function App() {
                       title={
                         liveConfigured
                           ? label("Use the configured OpenAI provider")
-                          : label("Configure OPENAI_API_KEY to enable live mode")
+                          : label(
+                              "Configure OPENAI_API_KEY to enable live mode",
+                            )
                       }
                     >
                       {label("OpenAI live")}
