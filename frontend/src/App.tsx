@@ -166,6 +166,12 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
         <path d="M12 3v12m-4-4 4 4 4-4M4 17v3h16v-3" />
       </svg>
     );
+  if (name === "upload")
+    return (
+      <svg {...shared}>
+        <path d="M12 16V4m-4 4 4-4 4 4M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4" />
+      </svg>
+    );
   if (name === "search")
     return (
       <svg {...shared}>
@@ -720,43 +726,105 @@ export default function App() {
               </p>
               {!runId && (
                 <div className="dataset-import">
-                  <div>
-                    <strong>{label("Analyze your CSV files")}</strong>
-                    <span>{label("Required columns: src, dst, date, sum_kzt")}</span>
+                  <div className="dataset-import-head">
+                    <span className="dataset-import-kicker">
+                      {label("Custom dataset")}
+                    </span>
+                    <strong>{label("Analyze your own data")}</strong>
+                    <span>
+                      {label("Required columns: src, dst, date, sum_kzt")}
+                    </span>
                   </div>
-                  <input
-                    type="file"
-                    accept=".csv,text/csv"
-                    multiple
-                    disabled={busy}
-                    onChange={(event) => {
-                      setUploadFiles(Array.from(event.target.files ?? []));
-                      setImportedDataset(null);
-                    }}
-                  />
-                  <input
-                    value={seedInput}
-                    disabled={busy}
-                    placeholder={label("Seed GIDs, separated by commas")}
-                    aria-label={label("Seed GIDs")}
-                    onChange={(event) => {
-                      setSeedInput(event.target.value);
-                      setImportedDataset(null);
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void uploadDataset()}
-                    disabled={busy || !uploadFiles.length || !seedInput.trim()}
-                  >
-                    {label("Prepare dataset")}
-                  </button>
+                  <div className="dataset-import-fields">
+                    <label
+                      className={`dataset-file-drop ${uploadFiles.length ? "has-files" : ""}`}
+                      htmlFor="dataset-files"
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        const files = Array.from(event.dataTransfer.files).filter(
+                          (file) => file.name.toLowerCase().endsWith(".csv"),
+                        );
+                        setUploadFiles(files);
+                        setImportedDataset(null);
+                      }}
+                    >
+                      <input
+                        id="dataset-files"
+                        className="dataset-file-input"
+                        type="file"
+                        accept=".csv,text/csv"
+                        multiple
+                        disabled={busy}
+                        onChange={(event) => {
+                          setUploadFiles(Array.from(event.target.files ?? []));
+                          setImportedDataset(null);
+                        }}
+                      />
+                      <span className="dataset-file-icon">
+                        {uploadFiles.length ? (
+                          <Icon name="check" size={19} />
+                        ) : (
+                          <Icon name="upload" size={19} />
+                        )}
+                      </span>
+                      <span className="dataset-file-copy">
+                        <strong>
+                          {uploadFiles.length
+                            ? `${uploadFiles.length} ${label(uploadFiles.length === 1 ? "file selected" : "files selected")}`
+                            : label("Choose CSV files")}
+                        </strong>
+                        <small>
+                          {uploadFiles.length
+                            ? uploadFiles.map((file) => file.name).join(", ")
+                            : label("or drop them here · up to 12 files / 25 MB")}
+                        </small>
+                      </span>
+                    </label>
+                    <label className="dataset-seeds">
+                      <span>{label("Seed client GIDs")}</span>
+                      <input
+                        value={seedInput}
+                        disabled={busy}
+                        placeholder={label("e.g. 9007199254740993, 9007199254740995")}
+                        aria-label={label("Seed GIDs")}
+                        onChange={(event) => {
+                          setSeedInput(event.target.value);
+                          setImportedDataset(null);
+                        }}
+                      />
+                      <small>
+                        {label("Separate IDs with commas, spaces, or new lines")}
+                      </small>
+                    </label>
+                  </div>
+                  <div className="dataset-import-footer">
+                    <span className="dataset-local-note">
+                      <Icon name="shield" size={15} />
+                      {label("Files stay in this local workspace")}
+                    </span>
+                    <button
+                      className="dataset-prepare-button"
+                      type="button"
+                      onClick={() => void uploadDataset()}
+                      disabled={
+                        busy || !uploadFiles.length || !seedInput.trim()
+                      }
+                    >
+                      {busy ? <Spinner /> : <Icon name="arrow" size={17} />}
+                      {label("Prepare dataset")}
+                    </button>
+                  </div>
                   {importedDataset && (
-                    <small>
-                      {importedDataset.n_files} {label("files")} ·{" "}
-                      {importedDataset.n_transactions} {label("transactions")} ·{" "}
-                      {importedDataset.n_nodes} {label("clients")}
-                    </small>
+                    <div className="dataset-import-success" role="status">
+                      <Icon name="check" size={16} />
+                      <strong>{label("Dataset ready")}</strong>
+                      <span>
+                        {importedDataset.n_files} {label("files")} ·{" "}
+                        {importedDataset.n_transactions} {label("transactions")} ·{" "}
+                        {importedDataset.n_nodes} {label("clients")}
+                      </span>
+                    </div>
                   )}
                 </div>
               )}
