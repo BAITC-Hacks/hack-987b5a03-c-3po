@@ -528,7 +528,9 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
 
 class CatalogTests(unittest.TestCase):
     def test_terminal_schema_matches_documented_contract(self) -> None:
-        document = (Path(__file__).resolve().parents[2] / "docs" / "AGENT_LOOP.md").read_text()
+        document = (Path(__file__).resolve().parents[2] / "docs" / "AGENT_LOOP.md").read_text(
+            encoding="utf-8"
+        )
         block = (
             document.split("## 7.", 1)[1]
             .split("```json", 1)[1]
@@ -537,7 +539,9 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(json.loads(block), AGENT_DECISION_SCHEMA)
 
     def test_published_schemas_match_code(self) -> None:
-        document = (Path(__file__).resolve().parents[2] / "docs" / "TOOLS.md").read_text()
+        document = (Path(__file__).resolve().parents[2] / "docs" / "TOOLS.md").read_text(
+            encoding="utf-8"
+        )
         block = (
             document.split("## 3.", 1)[1]
             .split("```json", 1)[1]
